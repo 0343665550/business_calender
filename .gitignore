@@ -1,6 +1,8 @@
 *.pyc
 *.mo
 env/
+files/
+.vscode/
 runServerCalendar.bat
 test.vuerd.json
 vehicle_file.log
