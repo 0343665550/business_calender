@@ -1,0 +1,167 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHƯƠNG TRÌNH LẬP LỊCH CÔNG TÁC TUẦN</title>
+    <link rel="icon shortcut" type='image/png' href="{% static 'calender/images/favicon.ico' %}" />
+    <link rel="stylesheet" href="{% static 'calender/css/bootstrap.css' %}">
+    <link rel="stylesheet" href="{% static 'calender/css/footer_v2.css' %}" type="text/css" media="screen, projection">
+    <style>
+        tbody{
+            display:block;
+            width:100%;
+            float:left;
+            height:72vh;
+            overflow:hidden;
+        }
+        thead{
+            display:block;
+            width:100%;
+            float:left;
+        }
+        tr {
+            /* display:block; */
+            width:100%;
+            overflow:hidden;
+        } 
+       
+        /*.scroll{display:block;width:100%;height:620px;overflow:hidden;}*/
+    </style>
+</head>
+<body onload="startTime()">
+    <div class="" >
+        <div class="col-xl-1">
+        </div>
+        <div class="col-xl-12 table-responsive">
+            <table class="table table-hover table-bordered styleshow scroll" width="100%">
+                <thead width="100%">
+                    <tr class="head_slider" >
+                        <th colspan="6" style="text-align:right; width:100vw;font-size: 1.5vw;">
+                            {% comment %} <img title="EVN-CPC" height="55" width="65" style="margin:1px 5px; padding-right: 1px;" src="{% static 'calender/images/logo.png/' %}"> {% endcomment %}
+                            <div style="margin: 1.5vw 5vw 1.5vw 3vw;"><span id="date_timer" ></span>, <span id="time"></span></div>
+                        </th>
+                    </tr>
+                    <tr class="headlcnshow" >
+                        <th colspan="6" class="text-center">
+                            <span >LỊCH CÔNG TÁC TUẦN TỪ NGÀY {{start_date}} ĐẾN NGÀY {{end_date}}</span>
+                        </th>
+                    </tr>
+                    <tr style="background-color:#d21d1d;text-align:center;border-color: #d21d1d; font-size:1.5vw; height: 4vh;">
+                        <th width="110px">THỨ NGÀY</th>
+                        <th width="10%">T. GIAN</th>
+                        <th width="10%">ĐỊA ĐIỂM</th>
+                        <th width="35%">NỘI DUNG</th>
+                        <th width="10%">CHỦ TRÌ</th>
+                        <th width="24%">THÀNH PHẦN</th>
+                    </tr>
+                </thead>
+                <tbody class="tbodyshow" width="100%">
+                    <tr id="result_tr" style="display: none;"></tr>
+                    {% for i in date_list %}
+                        {% if i.count != 0 %}
+                            <tr class="table_row">
+                                <td 
+                                    width="11%" 
+                                    style="color:#c70505eb;font-weight:500;text-align:center;font-size:1.7vw"
+                                    rowspan="{{i.count}}"
+                                >{{i.day}} <br/> {{i.date}}
+                                </td>
+                                {% for j in calender %}
+                    
+                                    {% if i.date == j.date %}
+                                        {% if j.row_num > 1 %}
+                                            <tr>
+                                        {% endif %}
+                                            <td width="10%" style="font-size:1.5vw">{{j.starttime}} - {{j.endtime}}</td>
+                                            <td width="10%" style="font-size:1.5vw">{{j.meeting_name | default:j.address}}</td>
+                                            <td width="35%" style="font-weight:500;font-size:1.5vw;">{{j.content}}</td>
+                                            <td width="10%" style="font-size:1.5vw">{{j.name}}</td>
+                                            <td width="24%" style="font-size:1.5vw">
+                                                {{ j.join_component|join:", " }}
+                                                {% if j.other_component %}
+                                                    {% if j.join_component %}
+                                                        , {{ j.other_component }}
+                                                    {% else %}
+                                                        {{ j.other_component }}
+                                                    {% endif %}
+                                                {% endif %}
+                                            </td>
+                                        {% if j.row_num > 1 %}
+                                            </tr>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endfor %}
+                            </tr>
+                        {% endif %}
+                   {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="col-xl-1">
+        </div>
+    </div>
+</body>
+</html>
+<script src="{% static 'calender/js/jquery.min-3.5.1.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/bootstrap.min.js' %}" type="text/javascript"></script>
+<script>
+    const SLIDE_SPEED = 40;
+    const TBODY_HEIGHT = '72vh';         // Tương đương height với tbody trong CSS
+    // Scroller sẽ run từ marginTop: TBODY_HEIGHT đến -height trong thời gian 10000ms
+    // height variable is height of scroller
+    var height = $("tbody").prop("scrollHeight");
+    // console.log(height);
+    // console.log(TBODY_HEIGHT);
+    function animatethis(targetElement, speed) {
+        $(targetElement).animate({ marginTop: "-"+height+"px"},
+        {
+            duration: speed,
+            complete: function ()
+            {
+                $(targetElement).css('marginTop', TBODY_HEIGHT);
+                $(targetElement).css('display', 'block');
+                animatethis(targetElement, speed);
+            }
+        });
+    };
+    // Tốc độ của slide bằng height của scroller*SLIDE_SPEED
+    animatethis($('.scroll tbody tr:first-child'), height*SLIDE_SPEED);
+
+    var weekday = new Array(7);
+    weekday[0] = "Chủ nhật";
+    weekday[1] = "Thứ hai";
+    weekday[2] = "Thứ ba";
+    weekday[3] = "Thứ tư";
+    weekday[4] = "Thứ năm";
+    weekday[5] = "Thứ sáu";
+    weekday[6] = "Thứ bảy";
+
+    function startTime() {
+        var today = new Date();
+        var h = today.getHours();
+        var m = today.getMinutes();
+        var s = today.getSeconds();
+        m = checkTime(m);
+        s = checkTime(s);
+        document.getElementById('time').innerHTML = h + ":" + m + ":" + s;
+        var t = setTimeout(startTime, 500);
+    }
+
+    function checkTime(i) {
+        if (i < 10) {i = "0" + i};  // add zero in front of numbers < 10
+        return i;
+    }
+
+    var today = new Date();
+    var dd = String(today.getDate()).padStart(2, '0');
+    var mm = String(today.getMonth() + 1).padStart(2, '0'); //January is 0!
+    var yyyy = today.getFullYear();
+
+    var n = weekday[today.getDay()];
+    today = dd + '/' + mm + '/' + yyyy;
+    // console.log(today);
+    // console.log(n);
+    $("#date_timer").text(n +', '+ today );
+</script>
