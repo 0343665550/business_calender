@@ -100,6 +100,11 @@ def getWeek_draf(request):
         list_chair_unit = Department.objects.filter(active=True).order_by('group', 'sequence')
         calender = getCalender_draf(start, chair_unit_id)
         date_list = dateOfWeek_draf(start, chair_unit_id)
+        user_id = request.user.pk
+        department = getDepartment(user_id)
+        department_id = department[0]['department_id']
+        group = getGroupUserId(user_id)
+        group_list = [i['group_id'] for i in group]
         context = {
             'date_draf': date,
             'start_draf': data['start'],
@@ -110,7 +115,9 @@ def getWeek_draf(request):
             'list_chair_unit': list_chair_unit,
             'department_id': chair_unit_id,
             'date_list_draf': date_list,
-            'calender_draf': calender
+            'calender_draf': calender,
+            'group_list': group_list,
+            'duid': department_id
         }
         return render(request, "calender/reload_draf.html", context)
 
@@ -125,7 +132,7 @@ def get_status(status_id):
         return "Bổ sung"
     elif status_id == 4:
         return "Đột xuất"
-    elif status_id == 3:
+    elif status_id == 5:
         return "Đổi địa điểm"
     else:
         return "Đổi thời gian"
@@ -583,7 +590,7 @@ def deletefileRelease(request):
                         os.remove(path)
                 except ValueError as e:
                     # print('ValueError: ', e)
-                    break
+                    continue
 
         user_id = request.user.pk
         department = getDepartment(user_id)
@@ -609,7 +616,6 @@ def deletefileRelease(request):
             'date_list': date_list,
             'calender': calender
         }
-        print('context: ', context['date'])
         return render(request, "calender/data.html", context)
    
 
@@ -685,7 +691,7 @@ class Calender(View):
         week = convertNumberWeek(date)
         list_chair_unit = Department.objects.filter(active=True).order_by('group', 'sequence')
         if 3 in group_list:
-            department_id = '0'
+            # department_id = '0'
             # Check approval of the department draft
             status = check_calender_letter(date, department_id)
             # Check approval of the letter draft
@@ -719,6 +725,7 @@ class Calender(View):
                 'list_chair_unit': list_chair_unit,
                 'date_list_evn': date_list_evn,
                 'calender_evn': calender_evn,
+                'duid': department_id
             }
         else:
             group_list =  [i['group_id'] for i in group]
@@ -747,14 +754,16 @@ class Calender(View):
                 'start_draf': data['start'],
                 'end_draf': data['end'],
                 'week_draf': week,
-                'department_id': '0',
+                'department_id': department_id,
                 'status_draf': status_draf,
                 'list_chair_unit': list_chair_unit,
                 'date_list_draf': date_list_draf,
                 'calender_draf': calender_draf,
+                'duid': department_id
             }
+        print(context)
         if 3 in group_list:
-            #print("calender/letter_draft.html")
+            print("calender/letter_draft.html")
             return render(request, "calender/letter_draft.html", context)
         else:
             return render(request, "calender/body.html", context)
@@ -955,13 +964,14 @@ class Login(View):
             username = request.POST.get('username')
             password = request.POST.get('password')
             # Authenticate with LDAP
-            # ldap = ldap_test.authenticate(address, domain, username, password)
+            ldap = ldap_test.authenticate(address, domain, username, password)
             # print('result: ', ldap)
-            user_auth = authenticate(username=username, password=password)
-            print(user_auth)
-            # user = User.objects.filter(username=username)
-            print(username)
-            if user_auth:    
+            # user_auth = authenticate(username=username, password=password)          # APPLY FOR DEVELOPMENT
+            user_auth = authenticate(username=username, password=user_password)
+            # print(user_auth)
+            # print(username)
+            # if user_auth:                 # APPLY FOR DEVELOPMENT
+            if user_auth and ldap:   
             # Redirecting to the required login according to user status.
                 if user_auth.is_active:
                     if user_auth.is_superuser or user_auth.is_staff:
@@ -1092,7 +1102,8 @@ def get_calender_type(date, chair_unit_id, status):
     # print(data)
     if data:
         for i in data:
-            sql_joins = """select cd.id, cd.name from calender_department cd inner join calender_joincomponent cjc on cd.id = cjc.department_id where cjc.calender_id = %s"""
+            #sql_joins = """select cd.id, cd.name from calender_department cd inner join calender_joincomponent cjc on cd.id = cjc.department_id where cjc.calender_id = %s"""
+            sql_joins = """select cd.id, cd.name from calender_department cd inner join calender_calender cjc on cd.id = cjc.chair_unit_id where cjc.id = %s"""
             rs_joins = connect_sql(sql_joins, i['id'])
             sql_prepares = """select cd.id, cpu.department_id, cd.name from calender_department cd inner join calender_prepareunit cpu on cd.id = cpu.department_id where cpu.calender_id = %s"""
             rs_prepares = connect_sql(sql_prepares, i['id'])
@@ -1240,6 +1251,8 @@ def company_draft(request):
         chair_unit_id = request.POST['value']
         data = start_end_of_week(date)
         user_id = request.user.pk
+        department = getDepartment(user_id)
+        department_id = department[0]['department_id']
         group = getGroupUserId(user_id)
         # print('grouppppppppppppp re-render: ', group)
         group_list = [i['group_id'] for i in group]
@@ -1261,7 +1274,8 @@ def company_draft(request):
             'department_id': chair_unit_id,
             'date_list_evn': date_list,
             'calender_evn': calender,
-            'group_list': group_list
+            'group_list': group_list,
+            'duid': department_id
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1278,6 +1292,10 @@ def approval_draft_com(request):
         
         data = start_end_of_week(date)
         user_id = request.user.pk
+        department = getDepartment(user_id)
+        department_id = department[0]['department_id']
+        group = getGroupUserId(user_id)
+        group_list = [i['group_id'] for i in group]
         week = convertNumberWeek(date)
 
         for item in listIdCalender:
@@ -1312,7 +1330,9 @@ def approval_draft_com(request):
             'list_chair_unit': list_chair_unit,
             'department_id': chair_unit_id,
             'date_list_evn': date_list,
-            'calender_evn': calender
+            'calender_evn': calender,
+            'group_list': group_list,
+            'duid': department_id
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1338,6 +1358,7 @@ def cancel_approval_draft_com(request):
         status = check_calender_letter(date, chair_unit_id)
         # print(status)
         group = getGroupUserId(user_id)
+        group_list = [i['group_id'] for i in group]
         list_chair_unit = Department.objects.filter(active=True).order_by('group', 'sequence')
         # calender = getCalender(department_id, start)
         # date_list = dateOfWeek(department_id, start)
@@ -1354,7 +1375,9 @@ def cancel_approval_draft_com(request):
             'group': group,
             'status_evn': status,
             'date_list_evn': date_list,
-            'calender_evn': calender
+            'calender_evn': calender,
+            'group_list': group_list,
+            'duid': department_id
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1659,6 +1682,8 @@ class UpdateDeleteExpectedView(RetrieveUpdateDestroyAPIView):
 def confirmUpdateCalender(request):
     if request.method == "POST":
         user_id = request.user.pk
+        department = getDepartment(user_id)
+        department_id = department[0]['department_id']
         date = request.POST['date']
         idcalender = request.POST['idcalender']
         chair_unit_id = request.POST['value']
@@ -1694,7 +1719,8 @@ def confirmUpdateCalender(request):
             'calender': calender,
             'group_list': group_list,
             'list_users': list_users,
-            'expected_list': expectedlist
+            'expected_list': expectedlist,
+            'department_id': department_id
         }
         return render(request, "calender/data.html", context)
 
@@ -1707,6 +1733,8 @@ def confirmRecycleCalender(request):
         execute_sql(sql_update, datetime.now(), idcalender)
         data = start_end_of_week(date)
         user_id = request.user.pk
+        department = getDepartment(user_id)
+        department_id = department[0]['department_id']
         week = convertNumberWeek(date)
         group = getGroupUserId(user_id)
         group_list = [i['group_id'] for i in group]
@@ -1729,7 +1757,8 @@ def confirmRecycleCalender(request):
             'calender': calender,
             'group_list': group_list,
             'list_users': list_users,
-            'expected_list': expectedlist
+            'expected_list': expectedlist,
+            'department_id': department_id
         }
         return render(request, "calender/data.html", context)
 
@@ -1749,7 +1778,8 @@ def check_double_calender(request):
         date1 = (datetime.strptime(date1, '%d-%m-%Y %H:%M')).strftime('%Y-%m-%d %H:%M')
         date2 = request.POST['date2']
         date2 = (datetime.strptime(date2, '%d-%m-%Y %H:%M')).strftime('%Y-%m-%d %H:%M')
-        meeting_id = request.POST['meeting_id']
+        if request.POST['meeting_id']:
+            meeting_id = request.POST['meeting_id']  
         chair_unit_id = request.POST['chair_unit_id']
         if chair_unit_id:
             sql_manager = "select id from calender_department where name like N'GĐPC%' or name like N'%PGĐ KD%' or name like N'%PGĐ KT%' or name like N'%PGĐ ĐTXD%'"
@@ -1837,6 +1867,10 @@ def confirmUndoBrowse(request):
         
         data = start_end_of_week(date)
         user_id = request.user.pk
+        department = getDepartment(user_id)
+        department_id = department[0]['department_id']
+        group = getGroupUserId(user_id)
+        group_list = [i['group_id'] for i in group]
         week = convertNumberWeek(date)
 
         sql2 = "UPDATE calender_calender SET check_calender_letter=0, status='ACCEPT', write_date = %s WHERE id = %s"
@@ -1858,7 +1892,9 @@ def confirmUndoBrowse(request):
             'list_chair_unit': list_chair_unit,
             'department_id': chair_unit_id,
             'date_list_evn': date_list,
-            'calender_evn': calender
+            'calender_evn': calender,
+            'group_list': group_list,
+            'duid': department_id
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1927,6 +1963,7 @@ def check_status(calender_id, form):
     return week, None
 
 def draftEdit(request, pk):
+    print('tuanta5 test add lich')
     try:
         # print('pkkkkkkkkkkkkkk: ', pk)
         calendar = CalenderModel.objects.get(id=pk)
@@ -2192,7 +2229,8 @@ def group_by_depart(user_list):
     final_result = []
     for i in result:
         urs = ", ".join(i['user'])
-        final_result.append("<b>" + i['name'] + "</b>" + " (" + urs + ")")
+        #final_result.append("<b>" + i['name'] + "</b>" + " (" + urs + ")")
+        final_result.append("" + urs + "")
     return final_result
     # BQLDA(Phạm Văn Hồng, Lê Văn Thái, Lê Ngọc Trường)
     # ...

@@ -5,3 +5,5 @@ files/
 runServerCalendar.bat
 test.vuerd.json
 vehicle_file.log
+.vscode/
+db.sqlite3

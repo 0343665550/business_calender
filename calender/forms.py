@@ -50,29 +50,25 @@ class CalenderChangeForm(forms.ModelForm):
     class Meta:
         model = Calender
         # fields = "__all__"
-        fields = ['start_time', 'end_time', 'location', 'address', 'chair_unit', 'join_quantity', 'content', 'requirement1', 'requirement2', 'requirement3', 'requirement4', 'requirement5', 'other_requirements', 'join_component', 'other_component', 'prepare_unit', 'other_prepare']
+        fields = ['start_time', 'end_time', 'address', 'chair_unit', 'join_quantity', 'content', 'requirement1', 'requirement2', 'requirement3', 'requirement4', 'requirement5', 'other_requirements', 'other_component', 'other_prepare']
         # localized_fields = ('start_time',)
 
     def __init__(self, *args, **kwargs):
         super(CalenderChangeForm, self).__init__(*args, **kwargs)
         self.fields['start_time'].widget = AdminSplitDateTime()
         self.fields['end_time'].widget = AdminSplitDateTime()
-        self.fields['chair_unit'].queryset = Department.objects.filter(active=True).order_by('group', 'sequence')
-        self.fields['join_component'].queryset = Department.objects.filter(active=True).order_by('group', 'sequence')
-        self.fields['prepare_unit'].queryset = Department.objects.filter(active=True).order_by('group', 'sequence')
         # self.fields["start_time"].widget = DateTimeInput()
         # self.fields["start_time"].input_formats = ["%Y/%m/%dT%H:%M", "%Y/%m/%d %H:%M"]
         # self.fields["end_time"].widget = DateTimeInput()
         # self.fields["end_time"].input_formats = ["%d-%m-%YT%H:%M", "%d-%m-%Y %H:%M"]
 
     def clean(self):
-        print("clean method")
         cleaned_data = super(CalenderChangeForm, self).clean()
         # name = cleaned_data.get('name')
         # print('CLEAN DATA: ', cleaned_data)
         # print('CLEAN DATA count: ', len(cleaned_data))
-        if len(cleaned_data) != 17:
-            raise forms.ValidationError('Hãy sửa lỗi sai dưới đây')
+        if len(cleaned_data) != 14:
+            raise forms.ValidationError('Vui lòng nhập đầy đủ thông tin!')
         return cleaned_data
     
     # def save(self, force_update=True):

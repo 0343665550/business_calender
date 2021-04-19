@@ -19,17 +19,5 @@ django.jQuery(document).ready(function () {
             django.jQuery("#id_expected_km").removeAttr('disabled');
             django.jQuery("#id_expected_crane_hour").removeAttr('disabled');
         }
-    });
-    // Event when click "Lãnh đạo duyệt" checkbox in create functionality
-    if (django.jQuery("input[id='id_is_appr_manager']").prop("checked")) {
-        django.jQuery(".field-managers").attr("style", "");
-    }
-    django.jQuery("#id_is_appr_manager").on('click', function () {
-        if (django.jQuery("input[id='id_is_appr_manager']").prop("checked")) {
-            django.jQuery(".field-managers").attr("style", "");
-        } else {
-            django.jQuery(".field-managers").attr("style", "display:none;");
-        }
     })
-
 })

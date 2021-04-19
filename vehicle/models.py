@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
-from calender.models import Department, Calender
+from calender.models import Department
 
 # Create your models here.
 class VehicleType(models.Model):
@@ -73,9 +73,6 @@ class VehicleCalender(models.Model):
     write_uid = models.ForeignKey(User, verbose_name="Người sửa", related_name="+", on_delete=models.SET_NULL, null=True)
     create_date = models.DateTimeField('Ngày tạo', auto_now_add=True)
     write_date = models.DateTimeField('Ngày sửa', null=True)
-    calender = models.ForeignKey(Calender, verbose_name="Lịch tuần", on_delete=models.SET_NULL, null=True, blank=True)
-    is_appr_manager = models.BooleanField('Lãnh đạo duyệt', default=False)
-    approved_by = models.ForeignKey(User, verbose_name="Người duyệt", related_name="+", on_delete=models.SET_NULL, null=True)
 
     class Meta:
         verbose_name = _("Lịch xe")

@@ -178,17 +178,17 @@
                                         </td>
                                         <td width="10%">
                                             <input class="checkbox" name="check" type="checkbox" value="{{ j.id }}" style="display: inline-block;"
-                                                {% if j.check_calender %}
+                                                {% if j.check_calender_letter %}
                                                 checked
                                                 {% endif %}
-                                                {% if 1 in group_list and 2 not in group_list %}
+                                                {% if 2 in group_list and 3 not in group_list %}
                                                     disabled
                                                 {% endif %}
                                             />
-                                            {% if j.check_calender %}
+                                            {% if j.check_calender_letter %}
                                                 <span>Lịch đã duyệt</span>
                                             {% else %}
-                                                <span>Duyệt lịch</span>
+                                                <span>Chưa duyệt lịch</span>
                                             {% endif %}
                                         </td>
                                     </tr>

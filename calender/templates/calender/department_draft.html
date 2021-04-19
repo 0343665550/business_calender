@@ -21,10 +21,10 @@
     <div class="row">
         <div class="col-md-4">
             <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
-                Phòng ban
+                Đơn vị
             </span><br/>
             <select class="form-group" style="margin: 1px;width:200px;" id="depart_unit_id">
-                <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
+                <option value="0" selected>TẤT CẢ ĐIỆN LỰC</option>
                 {% if list_chair_unit %}
                     {% for item in list_chair_unit %}
                         <option value="{{item.id}}">{{ item.name | upper }}</option>

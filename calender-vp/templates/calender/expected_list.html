@@ -1,0 +1,16 @@
+<div class="row">
+    <div class="col-md-12">
+        <div class="alert alert-warning" style="padding: .25rem 0.5rem; color: red;" role="alert">
+            <i class="fa fa-flag" aria-hidden="true"></i> <strong>DỰ KIẾN LỊCH CÔNG TÁC TUẦN SAU:</strong>
+        </div>
+        <div class="list-group">
+            {% if expected_list %}
+                {% for item in expected_list %}
+                    <li class="list-group-item">{{ item.content | linebreaks}}</li>
+                {% endfor %}
+            {% else %}
+                <li class="list-group-item ">Chưa có lịch dự kiến!</li>
+            {% endif %}
+        </div>
+    </div>
+</div>

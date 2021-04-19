@@ -43,10 +43,10 @@
         <div class="row">
             <div class="col-md-4">
                 <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
-                    Phòng ban
+                    Đơn vị
                 </span><br/>
                 <select class="form-group" style="width:200px;" id="chair_unit_id" onchange="go_from_select(this.options[this.selectedIndex].value)">
-                    <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
+                    <option value="0" selected>TẤT CẢ ĐIỆN LỰC</option>
                     {% if list_chair_unit %}
                         {% for item in list_chair_unit %}
                             <option value="{{item.id}}">{{ item.name | upper }}</option>
@@ -57,7 +57,7 @@
             <div class="col-md-3"></div>
             <div class="col-md-5 align-self-end ml-auto">
                 <div class="form-group" style="float:right;">
-                    {% if 3 in group_list %}
+                    {% if 333 in group_list %} <!-- thay 3 thanh so khac de bo button Trinh chieu -->
                         <a href="/shows/{{week}}" target="_blank"><button type="button" class="btn btn-primary btn-sm"><i class="fa fa-slideshare" aria-hidden="true"></i> Trình chiếu</button></a> 
                     {% endif %}
                     <a href="/admin/calender/calender/add/"><button type="button" class="btn btn-success btn-sm"><i class="fa fa-calendar-plus-o" aria-hidden="true"></i> Đăng ký lịch</button></a> 
@@ -95,7 +95,7 @@
                                                 <td class="SubHead15" align="center" width="12%">
                                                     Chuẩn bị</td>
                                                 <td class="SubHead15" align="center" width="12%">
-                                                    Chủ trì</td>
+                                                    Đơn vị đăng ký</td>
                                                 <td class="SubHead15" align="center"
                                                     {% if 3 in group_list %} 
                                                         width="15%"
@@ -168,14 +168,7 @@
                                                 </td>
                                                 <td width="15%">
                                                     <span>
-                                                        {{ j.join_component|join:", " }}
-                                                        {% if j.other_component %}
-                                                            {% if j.join_component %}
-                                                                , {{ j.other_component }}
-                                                            {% else %}
-                                                                {{ j.other_component }}
-                                                            {% endif %}
-                                                        {% endif %}
+														{{j.other_component}}
                                                     </span>
                                                 </td>
                                                 <td width="19%">
@@ -188,26 +181,29 @@
                                                 </td>
                                                 {% if 3 in group_list %}
                                                 <td style="text-align: center;">
-                                                    {% if j.cancel_status != 1 %}
-                                                        <a data-toggle="modal" data-target="#myModalUndo" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" data-meeting="{{j.meeting_name | default:j.address}}" title="Huỷ/Hoãn lịch họp" class="undo-idcalender" href="#UndoMeeting">
-                                                            <i class="fa fa-refresh fa-lg" style="color:#8e0cbd;" aria-hidden="true"></i>
-                                                        </a>
-                                                        &nbsp;&nbsp;
-                                                        {% if j.slide_show == 0 %}
-                                                            <a data-toggle="modal" class="myButtonShow" data-id="{{ j.id }}" title="Trình chiếu" class="show-idcalender" href="#">
-                                                                <i class="fa fa-hand-o-left" style="color:#8e0cbd;" aria-hidden="true"></i>
+                                                    {% comment %} If department of user equal unit of chair then display functionalities {% endcomment %}
+                                                    {% if department_id == j.chair_unit_id %}        
+                                                        {% if j.cancel_status != 1 %}
+                                                            <a data-toggle="modal" data-target="#myModalUndo" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" data-meeting="{{j.meeting_name | default:j.address}}" title="Huỷ/Hoãn lịch họp" class="undo-idcalender" href="#UndoMeeting">
+                                                                <i class="fa fa-refresh fa-lg" style="color:#8e0cbd;" aria-hidden="true"></i>
                                                             </a>
+                                                            &nbsp;&nbsp;
+                                                            {% if j.slide_show == 0 %}
+                                                                <a data-toggle="modal" class="myButtonShow" data-id="{{ j.id }}" title="Trình chiếu" class="show-idcalender" href="#">
+                                                                    <i class="fa fa-hand-o-left" style="color:#8e0cbd;" aria-hidden="true"></i>
+                                                                </a>
+                                                            {% else %}
+                                                                <a data-toggle="modal" class="myButtonShowCancel" data-id="{{ j.id }}" title="Hủy trình chiếu" class="show-idcalender" href="#">
+                                                                    <i class="fa fa-times" style="color:#8e0cbd;" aria-hidden="true"></i>
+                                                                </a>
+                                                            {% endif %}
+                                                            
+
                                                         {% else %}
-                                                            <a data-toggle="modal" class="myButtonShowCancel" data-id="{{ j.id }}" title="Hủy trình chiếu" class="show-idcalender" href="#">
-                                                                <i class="fa fa-times" style="color:#8e0cbd;" aria-hidden="true"></i>
+                                                            <a data-toggle="modal" data-target="#myModalRecycle" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" data-meeting="{{j.meeting_name | default:j.address}}" title="Khôi phục lịch họp đã Huỷ/Hoãn" class="recycle-idcalender" href="#UndoMeeting">
+                                                                <i class="fa fa-recycle fa-lg" style="color:#8e0cbd;" aria-hidden="true"></i>
                                                             </a>
                                                         {% endif %}
-                                                        
-
-                                                    {% else %}
-                                                        <a data-toggle="modal" data-target="#myModalRecycle" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" data-meeting="{{j.meeting_name | default:j.address}}" title="Khôi phục lịch họp đã Huỷ/Hoãn" class="recycle-idcalender" href="#UndoMeeting">
-                                                            <i class="fa fa-recycle fa-lg" style="color:#8e0cbd;" aria-hidden="true"></i>
-                                                        </a>
                                                     {% endif %}
 
                                                 </td>
@@ -290,8 +286,8 @@
                             </div>
                             <!-- Modal footer -->
                             <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-undo" aria-hidden="true"></i> Cancel</button>
-                                <button type="button" class="btn btn-danger" data-dismiss="modal" id="FileDelete"><i class="fa fa-trash" aria-hidden="true"></i> Delete</button>
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-undo" aria-hidden="true"></i> Hủy</button>
+                                <button type="button" class="btn btn-danger" data-dismiss="modal" id="FileDelete"><i class="fa fa-trash" aria-hidden="true"></i> Xóa</button>
                             </div>
                         </form>
                         </div>

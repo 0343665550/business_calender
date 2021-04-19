@@ -1,4 +1,4 @@
-{% extends "admin/base.html" %}
+﻿{% extends "admin/base.html" %}
 
 {% block content %}
 {% load static %}
@@ -152,7 +152,7 @@
                                 
                                 </div>
                         
-                                <div class="form-row field-requirement1 field-requirement2 field-requirement3">
+<!--                                 <div class="form-row field-requirement1 field-requirement2 field-requirement3">
                                 
                                 
                                         <div class="field-box field-requirement1">
@@ -206,7 +206,7 @@
                                         
                                         </div>
                                 
-                                </div>
+                                </div> -->
                         
                                 <div class="form-row field-other_requirements">
                                 
@@ -251,9 +251,9 @@
                                 
                                         <div class="field-box field-prepare_unit">
                                         
-                                                {{ form.prepare_unit.label_tag }}
-                                                {{ form.prepare_unit.errors }}
-                                                {{ form.prepare_unit }}
+                                                {{ disableform.prepare_unit.label_tag }}
+                                                <!-- {{ disableform.prepare_unit.errors }} -->
+                                                {{ disableform.prepare_unit }}
                                                 
                                                 <p class="help">{{ form.prepare_unit.help_text }}</p>
                                                 

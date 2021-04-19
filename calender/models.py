@@ -132,7 +132,7 @@ class Calender(models.Model):
         ))
     address = models.CharField('Địa điểm', null=True, blank=True, max_length=255)
     location = models.ForeignKey(Meeting, verbose_name='Địa điểm', on_delete=models.CASCADE, null=True, blank=True)
-    chair_unit = models.ForeignKey(Department, verbose_name="Chủ trì", on_delete=models.CASCADE)
+    chair_unit = models.ForeignKey(Department, verbose_name="Đơn vị đăng ký", on_delete=models.CASCADE)
     join_component = models.ManyToManyField(
         Department,
         verbose_name=_('Thành phần tham gia'),
@@ -166,8 +166,8 @@ class Calender(models.Model):
     #     through_fields=('calender', 'department'),
     #     related_name="+"
     # )
-    other_component = models.TextField('Thành phần khác', null=True, blank=True)
-    other_prepare = models.TextField('Chuẩn bị khác', null=True, blank=True)
+    other_component = models.TextField('Thành phần', null=True, blank=True)
+    other_prepare = models.TextField('Chuẩn bị', null=True, blank=True)
     # prepare_unit = models.ManyToManyField(
     #     Department,
     #     verbose_name="Đơn vị chuẩn bị",
@@ -294,14 +294,13 @@ class Profile(models.Model):
     user = models.OneToOneField(User, verbose_name="Người dùng", on_delete=models.CASCADE)      # View diagram in database will specify ...
     department = models.ForeignKey(Department, verbose_name="Phòng ban", on_delete=models.CASCADE)
     is_driver = models.BooleanField('Lái xe', default=False)
-    is_manager = models.BooleanField('Ban giám đốc', default=False)
 
     class Meta:
         verbose_name = _('Hồ sơ')
         verbose_name_plural = _('Hồ sơ')
         
     def __str__(self):
-        return str(self.user.last_name)
+        return str(self.user)
 
 
 class Working_Division(models.Model):

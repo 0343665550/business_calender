@@ -128,6 +128,8 @@ django.jQuery( document ).ready(function() {
     django.jQuery("#id_other_prepare").attr("rows", "2");
     django.jQuery(".vLargeTextField").attr("cols", 10);
     django.jQuery(".vLargeTextField").css("font-size", 14);
+    // django.jQuery("#id_join_component").attr('disabled', true);
+    // console.log("JOIN COMPONENT");
 
     // django.jQuery(".field-is_active").replaceWith('<h3 class="icon-cross"></h3>');
 

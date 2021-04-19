@@ -14,12 +14,12 @@
     <div id="fbody">
         <nav>
             <div class="nav nav-tabs nav-pills bg-success" id="nav-tab" role="tablist">
-                <a class="nav-item nav-link active" id="nav-home-tab" data-toggle="tab" href="#nav-home" role="tab" aria-controls="nav-home" aria-selected="true"><i class="fa fa-calendar" aria-hidden="true"></i> LỊCH DỰ THẢO PHÒNG</a>
-                <a class="nav-item nav-link" id="nav-profile-tab" data-toggle="tab" href="#nav-profile" role="tab" aria-controls="nav-profile" aria-selected="false"><i class="fa fa-calendar-o" aria-hidden="true"></i> LỊCH DỰ THẢO CÔNG TY</a>
+                {% comment %} <a class="nav-item nav-link active" id="nav-home-tab" data-toggle="tab" href="#nav-home" role="tab" aria-controls="nav-home" aria-selected="true"><i class="fa fa-calendar" aria-hidden="true"></i> LỊCH DỰ THẢO PHÒNG</a> {% endcomment %}
+                <a class="nav-item nav-link active" id="nav-profile-tab" data-toggle="tab" href="#nav-profile" role="tab" aria-controls="nav-profile" aria-selected="false"><i class="fa fa-calendar-o" aria-hidden="true"></i> LỊCH DỰ THẢO ĐIỆN LỰC</a>
             </div>
         </nav>
         <div class="tab-content" id="nav-tabContent">
-            <div class="tab-pane fade show active" id="nav-home" role="tabpanel" aria-labelledby="nav-home-tab">
+            {% comment %} <div class="tab-pane fade show active" id="nav-home" role="tabpanel" aria-labelledby="nav-home-tab">
                 <div class="row">
                     <div class="col-md-3">
                         <form id="myform" method="post">
@@ -301,8 +301,8 @@
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="tab-pane fade" id="nav-profile" role="tabpanel" aria-labelledby="nav-profile-tab">
+            </div> {% endcomment %}
+            <div class="tab-pane fade show active" id="nav-profile" role="tabpanel" aria-labelledby="nav-profile-tab">
                 <div class="row">
                     <div class="col-md-3">
                         <form id="myform_draf" method="post">
@@ -312,7 +312,7 @@
                         </form>
                     </div>
                     <div class="col-md-6 tieudelich">
-                        <span class="badge badge-primary">LỊCH DỰ THẢO CÔNG TY TUẦN THỨ {{ week_draf }}</span><br>
+                        <span class="badge badge-primary">LỊCH DỰ THẢO TUẦN THỨ {{ week_draf }}</span><br>
                         <span class="badge badge-info">TỪ NGÀY: {{ start_draf }} ĐẾN NGÀY: {{ end_draf }}</span>
                     </div>
                     <div class="col-md-3">
@@ -326,10 +326,10 @@
                 <div class="row">
                     <div class="col-md-4">
                         <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
-                            Phòng ban
+                            Đơn vị
                         </span><br/>
                         <select class="form-group" style="margin: 1px;width:200px;" id="chair_unit_id">
-                            <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
+                            <option value="0" selected>TẤT CẢ ĐIỆN LỰC</option>
                             {% if list_chair_unit %}
                                 {% for item in list_chair_unit %}
                                     <option value="{{item.id}}">{{ item.name | upper }}</option>
@@ -340,6 +340,7 @@
                     <div class="col-md-3"></div>
                     <div class="col-md-5 align-self-end ml-auto">
                         <div class="form-group" style="margin: 1px;float:right; ">   
+                            <a href="/admin/calender/calender/add/"><button type="button" class="btn btn-success btn-sm"><i class="fa fa-calendar-plus-o" aria-hidden="true"></i> Đăng ký lịch</button></a>
                             <a href="/calender/export_xlsx/?date={{start_draf}}&status=draft-company&depart_id={{department_id}}"><button type="button" class="btn btn-outline-success btn-sm"><i class="fa fa-file-excel-o" aria-hidden="true"></i> In lịch</button></a>
                         </div>
                     </div>
@@ -381,8 +382,16 @@
                                                     {% if i.date == j.date %}
                                                 <tr>
                                                     <td style="text-align: center;" width="10%">
-                                                        <span class="SubHead12" style="font-size:11px; font-weight:bold;" id="">{{j.starttime}} - {{j.endtime}}</span></br>
+                                                        <span class="SubHead12" style="font-size:11px; font-weight:bold;" id="">{{j.starttime}} - {{j.endtime}}</span><br/>
                                                         {% include "calender/meetting_status.html" %}
+                                                        {% if 2 in group_list and duid == j.create_depart_id_id %}
+                                                            <a href="/admin/calender/draft/{{ j.id }}/change/" title="Chỉnh sửa lịch">
+                                                                <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
+                                                            </a>
+                                                            {% comment %} <a data-toggle="modal" data-target="#myModalDelete" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" title="Xoá lịch" class="delete-idcalender" href="#Delete">
+                                                                <i class="fa fa-trash fa-lg" aria-hidden="true"></i>
+                                                            </a> {% endcomment %}
+                                                        {% endif %}
                                                     </td>
                                                     <td width="30%">
                                                         <span>
@@ -430,13 +439,13 @@
                                                     </td>
                                                     <td width="10%">
                                                         <input class="checkbox_draf" name="check_draf" type="checkbox" value="{{ j.id }}" disabled style="display: inline-block;"
-                                                        {% if j.check_calender %}
+                                                        {% if j.check_calender_letter %}
                                                         checked
                                                         {% endif %} />
-                                                        {% if j.check_calender %}
+                                                        {% if j.check_calender_letter %}
                                                             <span>Lịch đã duyệt</span>
                                                         {% else %}
-                                                            <span>Duyệt lịch</span>
+                                                            <span>Chưa duyệt lịch</span>
                                                         {% endif %}
                                                     </td>
                                                 </tr>
@@ -450,6 +459,83 @@
                             </div>
                         </div>
                         {% endfor %}
+                        <!-- The Modal delete-->
+                        <div class="modal face" data-backdrop="false" data-background="false" id="myModalDelete">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                <form id="fdeletecalender" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                    <!-- Modal Header -->
+                                    <div class="modal-header">
+                                        <h4 class="modal-title">Xoá lịch</h4>
+                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                    </div>
+                                    
+                                    <!-- Modal body -->
+                                    <div class="modal-body confirm-delete">
+                                        <input type="hidden" id="idcalender_delete" name="idcalender_delete">
+                                        <p>Bạn có muốn xoá lịch với ngày giờ: <strong><span id="spidcalender_delete"></span></strong> này không?</p>
+
+                                        <!-- Image loader -->
+                                        <div id='loader' style="display: none; float: center; text-align: center;">
+                                            <img src="{% static 'calender/images/loading.gif' %}" width='64px' height='64px'>
+                                        </div>
+                                        <!-- Image loader -->
+
+                                    </div>
+                                    
+                                    <!-- Modal footer -->
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-undo" aria-hidden="true"></i> Hủy</button>
+                                        <button type="button" class="btn btn-danger" data-dismiss="modal" id="confirmDeleteButtonModal"><i class="fa fa-trash" aria-hidden="true"></i> Xóa</button>
+                                    </div>
+                                </form>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- The Modal -->
+                        <div class="modal face" data-backdrop="false" data-background="false" id="myModal">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                <form id="fuploadfile" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                    <!-- Modal Header -->
+                                    <div class="modal-header">
+                                        <h4 class="modal-title">Cập nhật file đính kèm</h4>
+                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                    </div>
+                                    
+                                    <!-- Modal body -->
+                                    <div class="modal-body">
+                                        <input type="hidden" id="date" name="date">
+                                        <input type="hidden" id="idcalender" name="idcalender">
+                                        <div class="custom-file">
+                                            <input type="file" class="custom-file-input" name='arrFile[]' id="customFile" onchange="Filevalidation()">
+                                            <label class="custom-file-label" for="customFile">Choose file</label>
+                                        </div>
+                                        <!-- Progress bar -->
+                                        <div class="progress" style="display:none;">
+                                            <div class="progress-bar progress-bar-striped" role="progressbar" style="width: 10%" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <!-- Display upload status -->
+                                        <div id="uploadStatus"></div>
+                                                    
+                                        <!-- Image loader -->
+                                        <div id='loader' style="display: none; float: center; text-align: center;">
+                                            <img src="{% static 'calender/images/loading.gif' %}" width='64px' height='64px'>
+                                        </div>
+                                        <!-- Image loader -->
+                                    </div>
+                                    
+                                    <!-- Modal footer -->
+                                    <div class="modal-footer">
+                                        <button type="button" id="submit" class="btn btn-success btn-sm"><i class="fa fa-cloud-upload" aria-hidden="true"></i> Upload file</button>
+                                        <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal"><i class="fa fa-times-circle" aria-hidden="true"></i> Close</button>
+                                    </div>
+                                </form>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

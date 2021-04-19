@@ -1,0 +1,197 @@
+{% load static %}
+<div class="tab-pane fade show {% if tab_active == 'left' %} active {% endif %}" id="nav-main" role="tabpanel" aria-labelledby="nav-main-tab" style="font-size:97%;">
+    <div class="row">
+        <div class="col-md-4">
+            <form id="myformdate" method="post">
+                {% csrf_token %}
+                <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Tuần lịch</span><br>
+                <input type="text" onchange="send()" value="{{ date }}" style="height:30px; width:200px;" readonly name="theDate" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms[0].theDate,'dd-mm-yyyy',this)">
+            </form>
+        </div>
+        <div class="col-md-4 tieudelich" style="display: inline-flex;">
+            <div style="margin-right:5px;">
+                <img title="EVN-CPC" height="60" width="70" style="padding-right: 1px;" src="{% static 'calender/images/logo.png/' %}">
+            </div>
+            <div>
+                <span class="badge badge-primary">LỊCH XE TUẦN THỨ {{ week }}</span><br>
+                <span class="badge badge-info">Từ ngày: {{ start }} đến ngày: {{ end }}</span>
+            </div>
+        </div>
+        <div class="col-md-4">
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-2">
+            <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
+                Đơn vị đăng ký
+            </span><br/>
+            <select class="form-group" onchange="send()" style="width:200px;" id="chair_unit_id" >
+                <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
+                {% if register_unit_list %}
+                    {% for item in register_unit_list %}
+                        <option value="{{item.id}}">{{ item.name | upper }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
+                Trạng thái
+            </span><br/>
+            <select class="form-group" onchange="send()" style="width:200px;" id="status_id" >
+                <option value="ALL" selected>TẤT CẢ TRẠNG THÁI</option>
+                {% if status_list %}
+                    {% for item in status_list %}
+                        <option value="{{item.0}}">{{ item.1 | upper }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        <div class="col-md-8 align-self-end ml-auto">
+            <div class="form-group" style="float:right; display:flex;">
+                {% if has_perm_add %}
+                <div style="margin:5px;">
+                    <a href="{% url 'vehicle:add_view' %}"><button type="button" class="btn btn-primary btn-sm"><i class="fa fa-plus-square" aria-hidden="true"></i> Đăng ký xe</button></a> 
+                </div>
+                {% endif %}
+                {% if has_perm_approval %}
+                    <div style="margin:5px;">
+                        <button id="btn_approval" type="button" class="btn btn-primary btn-sm"><i class="fa fa-calendar-check-o" aria-hidden="true"></i>
+                            Duyệt xe
+                        </button>
+                        <span style="font-size:12px;">CHỌN TẤT CẢ LỊCH </span>
+                        <input class="checked_all" type='checkbox' name='checkedAll' onchange="checkAll(this)" style="display: inline-block;"
+                            
+                        />
+                    </div>
+                {% endif %}
+                <div style="margin:5px;">
+                    <a href="/vehicle/export_xlsx/?date={{date}}&depart_id={{unit_id}}&status={{status_id}}&tab_active=left"><button type="button" class="btn btn-primary btn-sm"><i class="fa fa-file-excel-o" aria-hidden="true"></i> Xuất</button></a> 
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row" id="filter">
+        <div class="col-md-12">
+            {% for i in date_list %}
+                <div id="accordion">
+                    <div class="card">
+                        <div class="card-header bg-primary align-items-left justify-content-center h-25" id="heading{{i.date}}" style="background-color:#1f96e0 !important; padding:0.25rem 0.5rem;">
+                            <h5 class="mb-0" data-toggle="collapse" data-target=#{{i.date}} aria-expanded="true" aria-controls="collapseOne">
+                                <button class="btn btn-link btn-sm">
+                                    <span style="font-size:12px; text-align: center; font-weight:bold; color:white;">{{i.day | upper}} ({{i.date}})</span>
+                                </button>
+                                <span style="font-size:13px; margin-top: 9px; float:right; text-align: text-align: center; font-weight:bold; background-color:red; color:white;">{{i.count}}</span>
+                            </h5>
+                        </div>
+                        <div id={{i.date}} class="collapse show" aria-labelledby="headingOne" data-parent="#accordion">
+                            <div class="card-body" style="padding:0;">
+                            {% if i.count > 0 %}
+                                <table class="style4">
+                                    <tbody>
+                                        <tr class="headlcn">
+                                            <td class="SubHead15" style="text-align: center;" width="11%">
+                                                Thời gian đi - đến
+                                            </td>
+                                            <td class="SubHead15" style="text-align: center;" width="12%">
+                                                Nơi đi - đến</td>
+                                            <td class="SubHead15" style="text-align: center;" width="22%">
+                                                Nội dung</td>
+                                            <td class="SubHead15" style="text-align: center;" width="10%">
+                                                Đơn vị đăng ký</td>
+                                            <td class="SubHead15" style="text-align: center;" width="13%">
+                                                Lái xe
+                                            </td>
+                                            <td class="SubHead15" style="text-align: center;" width="13%">
+                                                Xe
+                                            </td>
+                                            <td class="SubHead15" style="text-align: center;"  width="12%">
+                                                Ghi chú
+                                            </td>
+                                            <td class="SubHead15" style="text-align: center;" width="7%">
+                                                
+                                            </td>
+                                        </tr>
+                                        {% for j in calender_list %}
+                                            {% if i.date == j.date %}
+                                                <tr class="{% if j.status == 'ASSIGNED' %}table-success{% endif %}">
+                                                    <td style="text-align: center;" width="11%">
+                                                        <span class="SubHead12" style="font-size:11px; font-weight:bold;" >
+                                                            {% if j.date == j.end_time|date:"d-m-Y" %}
+                                                                {{j.starttime}} - {{j.endtime}}
+                                                            {% else %}
+                                                                <div><span>Từ :  {{ j.starttime }} {{ j.start_time|date:"d-m-Y" }}</span></div>
+                                                                <div><span>Đến:{{ j.endtime }} {{ j.end_time|date:"d-m-Y" }}</span></div>
+                                                            {% endif %}
+                                                        </span><br/>
+                                                        {% if j.status == "NEW" %}
+                                                            <span class="badge badge-warning">Đăng ký</span>
+                                                        {% elif j.status == "CONFIRM" %}
+                                                            <span class="badge badge-success">Xác nhận</span>
+                                                        {% elif j.status == "APPROVAL" %}
+                                                            <span class="badge badge-info">Đã duyệt</span>
+                                                        {% elif j.status == "ASSIGNED" %}
+                                                            {% comment %} <span class="badge badge-secondary">Đã phân công</span> {% endcomment %}
+                                                        {% else %}
+                                                            <span class="badge badge-danger">Hủy/Hoãn</span>
+                                                        {% endif %}
+                                                        {% comment %} {% include "calender/meetting_status.html" %} {% endcomment %}
+                                                    </td>
+                                                    <td width="12%">
+                                                        <span>{{ j.departure}} => {{ j.destination }}</span>
+                                                    </td>
+                                                    <td width="22%">
+                                                        <span>
+                                                            {{j.content}}
+                                                        </span>
+                                                    </td>
+                                                    <td width="10%">
+                                                        <span>{{ j.register_unit_name }}</span>
+                                                    </td>
+                                                    <td width="13%">
+                                                        {% for user in j.drivers %}
+                                                            <div><span>{{ user.dep_name }} - {{ user.last_name|default:user.username}}</span></div>
+                                                        {% endfor %}
+                                                    </td>
+                                                    <td width="13%">
+                                                        {% for item in j.vehicles %}
+                                                            <div><span>{{ item.name }} ({{ item.number }})</span></div>
+                                                        {% endfor %}
+                                                    </td>
+                                                    <td width="12%"> {{ j.note }} </td>
+                                                    <td width="7%">
+                                                        <div class="form-group" style="float:right;">
+                                                            <a href="/vehicle/vehiclecalender/{{ j.id }}" title="Chi tiết lịch xe">
+                                                                <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
+                                                            </a>
+                                                            {% if j.status == "NEW" and has_perm_confirm %}
+                                                                <button class="badge badge-primary btn_confirm" data-id={{j.id}} data-status={{j.status}}><span style="font-size:8px;">Xác nhận</span></button>
+                                                            {% elif j.status == "CONFIRM" and has_perm_approval %}
+                                                                <input class="checkbox" name="check" type="checkbox" value="{{ j.id }}" style="display: inline-block;" />
+                                                                <span style="font-size:11px;">Duyệt</span>
+                                                            {% elif j.status == "APPROVAL" and has_perm_assign or j.status == "ASSIGNED" and has_perm_assign %}
+                                                                <div style="font-size:12px;">
+                                                                    <a data-toggle="modal" data-target="#modalDivision" data-id="{{ j.id }}" title="Phân công xe" class="badge badge-success vehicle_division" href="#AssignMeeting"><i class="fa fa-bell-o" aria-hidden="true"></i> Phân công</a>
+                                                                    
+                                                                </div>
+                                                            {% comment %} {% elif j.status == "ASSIGNED" %}
+                                                                <button class="badge badge-danger">Hủy/Hoãn</button> {% endcomment %}
+                                                            {% endif %}
+                                                        </div>
+                                                        
+                                                    </td>
+                                                </tr>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+            
+        </div>
+    </div>
+</div>
