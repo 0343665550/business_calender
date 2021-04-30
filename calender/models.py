@@ -10,22 +10,6 @@ from . import connect_sql as query
 from datetime import datetime, timedelta
 
 # Create your models here.
-class CalendarContent(models.Model):
-    name = models.TextField('Nội dung', max_length=255)
-    active = models.BooleanField('Kích hoạt', default=True)
-    create_uid = models.ForeignKey(User, verbose_name="Người tạo", related_name="+", on_delete=models.CASCADE)
-    write_uid = models.ForeignKey(User, verbose_name="Người sửa", related_name="+", on_delete=models.SET_NULL, null=True)
-    create_date = models.DateTimeField('Ngày tạo', auto_now_add=True)
-    write_date = models.DateTimeField('Ngày sửa', auto_now=True, null=True)
-
-    class Meta:
-        verbose_name = _("Nội dung công việc")
-        verbose_name_plural = _("Nội dung công việc")
-
-    def __str__(self):
-        return str(self.name)
-        
-
 class Department(models.Model):
     DEPARTMENT_UNIT = [
         ('IN', 'Trong cơ quan'),
@@ -42,7 +26,7 @@ class Department(models.Model):
         default=0
     )
     is_vehicle_calender = models.BooleanField("Lịch xe", default=False)
-    parent = models.ForeignKey('self', verbose_name="Trực thuộc phòng", on_delete=models.CASCADE, null=True, blank=True)
+    # parent = models.ForeignKey('self', verbose_name="Trực thuộc phòng", on_delete=models.CASCADE, null=True, blank=True)
     note = models.TextField('Ghi chú', null = True, blank=True)
     active = models.BooleanField('Kích hoạt', default=True)
 
@@ -95,8 +79,8 @@ class Calender(models.Model):
             day = datetime.strptime(start.strftime('%d-%m-%Y'), '%d-%m-%Y').date()
             # print(day)
 
-            current_week = int(now.strftime("%V")) + 1
-            select_week = int(day.strftime("%V")) + 1
+            current_week = int(now.strftime("%V"))
+            select_week = int(day.strftime("%V"))
             if self.pk is None and current_week == select_week:
                 # print("333333333333333333333")
                 self.cancel_status = 3          # additional status
@@ -148,7 +132,7 @@ class Calender(models.Model):
         ))
     address = models.CharField('Địa điểm', null=True, blank=True, max_length=255)
     location = models.ForeignKey(Meeting, verbose_name='Địa điểm', on_delete=models.CASCADE, null=True, blank=True)
-    chair_unit = models.ForeignKey(Department, verbose_name="Đơn vị đăng ký", on_delete=models.CASCADE)
+    chair_unit = models.ForeignKey(Department, verbose_name="Chủ trì", on_delete=models.CASCADE)
     join_component = models.ManyToManyField(
         Department,
         verbose_name=_('Thành phần tham gia'),
@@ -182,8 +166,8 @@ class Calender(models.Model):
     #     through_fields=('calender', 'department'),
     #     related_name="+"
     # )
-    other_component = models.TextField('Thành phần', null=True, blank=True)
-    other_prepare = models.TextField('Chuẩn bị', null=True, blank=True)
+    other_component = models.TextField('Thành phần khác', null=True, blank=True)
+    other_prepare = models.TextField('Chuẩn bị khác', null=True, blank=True)
     # prepare_unit = models.ManyToManyField(
     #     Department,
     #     verbose_name="Đơn vị chuẩn bị",
@@ -194,16 +178,7 @@ class Calender(models.Model):
     join_quantity = models.IntegerField('Số lượng tham gia')
     content = models.TextField(
         'Nội dung',
-        null=True, blank=True,
         help_text='Nội dung cuộc họp'
-    )
-    content_ids = models.ManyToManyField(
-        CalendarContent,
-        verbose_name=_('Nội dung công việc'),
-        blank=True,
-        db_table='calender_content',
-        related_name="+",
-        # related_query_name="calender",
     )
     attach_file = models.FileField('Đính kèm tệp', null=True, blank=True)
     status = models.CharField(
@@ -319,13 +294,14 @@ class Profile(models.Model):
     user = models.OneToOneField(User, verbose_name="Người dùng", on_delete=models.CASCADE)      # View diagram in database will specify ...
     department = models.ForeignKey(Department, verbose_name="Phòng ban", on_delete=models.CASCADE)
     is_driver = models.BooleanField('Lái xe', default=False)
+    is_manager = models.BooleanField('Ban giám đốc', default=False)
 
     class Meta:
         verbose_name = _('Hồ sơ')
         verbose_name_plural = _('Hồ sơ')
         
     def __str__(self):
-        return str(self.user)
+        return str(self.user.last_name)
 
 
 class Working_Division(models.Model):

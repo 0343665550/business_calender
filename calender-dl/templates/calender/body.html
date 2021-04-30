@@ -1,0 +1,922 @@
+{% extends 'admin/change_list.html' %}
+
+{% block content %}
+{% load static %}
+<link rel="icon shortcut" type='image/png' href="{% static 'calender/images/favicon.ico' %}" />
+<link rel="stylesheet" href="{% static 'calender/fonts/font-awesome-4.7.0/css/font-awesome.min.css' %}">
+<link rel="stylesheet" href="{% static 'calender/css/geoserver.css' %}" type="text/css" media="screen, projection">
+<link rel="stylesheet" href="{% static 'calender/css/bootstrap.min.css' %}">
+<link rel="stylesheet" href="{% static 'calender/css/dhtmlgoodies_calendar.css' %}" />
+<link rel="stylesheet" href="{% static 'calender/css/screen.css' %}" type="text/css" media="screen, projection">
+<link rel="stylesheet" href="{% static 'calender/css/footer_v2.css' %}" />
+
+<div id="body">
+    <div id="fbody">
+        <nav>
+            <div class="nav nav-tabs nav-pills bg-success" id="nav-tab" role="tablist">
+                {% comment %} <a class="nav-item nav-link active" id="nav-home-tab" data-toggle="tab" href="#nav-home" role="tab" aria-controls="nav-home" aria-selected="true"><i class="fa fa-calendar" aria-hidden="true"></i> LỊCH DỰ THẢO PHÒNG</a> {% endcomment %}
+                <a class="nav-item nav-link active" id="nav-profile-tab" data-toggle="tab" href="#nav-profile" role="tab" aria-controls="nav-profile" aria-selected="false"><i class="fa fa-calendar-o" aria-hidden="true"></i> LỊCH DỰ THẢO ĐIỆN LỰC</a>
+            </div>
+        </nav>
+        <div class="tab-content" id="nav-tabContent">
+            {% comment %} <div class="tab-pane fade show active" id="nav-home" role="tabpanel" aria-labelledby="nav-home-tab">
+                <div class="row">
+                    <div class="col-md-3">
+                        <form id="myform" method="post">
+                            {% csrf_token %}
+                            <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Tuần lịch</span><br>
+                            <input type="text" onchange="send()" value="{{ date }}" style="height:30px; width:200px;" readonly name="theDate2" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms[0].theDate2,'dd-mm-yyyy',this)">
+                        </form>
+                    </div>
+                    <div class="col-md-6 tieudelich">
+                        <span class="badge badge-primary">LỊCH DỰ THẢO {{ department_name }} TUẦN THỨ {{ week }}</span><br>
+                        <span class="badge badge-info">Từ ngày: {{ start }} đến ngày: {{ end }}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group" style="float:right;">
+                            <a href="/admin/calender/calender/"><button type="button" class="btn btn-info btn-sm"><i class="fa fa-home" aria-hidden="true"></i> Lịch ban hành</button></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4">
+                    </div>
+                    <div class="col-md-3"></div>
+                    <div class="col-md-5 align-self-end ml-auto">
+                        <div class="form-group" style="margin: 1px;float:right;">
+                            <input type="hidden" id="week" name="week" value="{{ week }}">
+                            <a href="/admin/calender/calender/add/"><button type="button" class="btn btn-success btn-sm"><i class="fa fa-calendar-plus-o" aria-hidden="true"></i> Đăng ký lịch</button></a>
+                            <span id="mutiButton">
+                                {% if status == "ACCEPT" or status == "DONE" %}
+                                    {% if status == "DONE" %}
+                                    {% else %}
+                                        {% if 2 in group_list %}
+                                            {% if calender %}
+                                                <button id="cancelcalender" type="button" class="btn btn-danger btn-sm"><i class="fa fa-calendar-times-o" aria-hidden="true"></i>
+                                                    Huỷ duyệt lịch
+                                                </button>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                {% elif status == "NEW"%}
+                                    {% if 2 in group_list %}
+                                        <button id="browsecalender" type="button" class="btn btn-primary btn-sm"><i class="fa fa-calendar-check-o" aria-hidden="true"></i>
+                                            Duyệt lịch
+                                        </button>
+                                    {% endif %}
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                {% if 2 in group_list %}
+                    {% if calender %}
+                    <div class="row">
+                        <div class="col-md-10"></div>
+                        <div class="col-md-2 align-self-end ml-auto">
+                            <div class="form-group" style="margin: 1px;margin-bottom: 0.25rem; float:right; color: white; background-color: #17a2b8;">
+                                <span>CHỌN TẤT CẢ LỊCH </span>
+                                <input class="checked_all" type='checkbox' name='checkedAll' onchange="checkAll(this)" style="display: inline-block;"
+                                    {% if status == "ACCEPT" or status == "DONE" %}
+                                        checked
+                                    {% endif %}
+                                    {% if status == "DONE" %}
+                                        disabled
+                                    {% endif %}
+                                    {% if 1 in group_list and 2 not in group_list %}
+                                        disabled
+                                    {% endif %}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
+                <div class="row">
+                    <div class="col-md-12">
+                        {% for i in date_list %}
+                        <div id="accordion">
+                            <div class="card">
+                                <div class="card-header bg-primary align-items-left justify-content-center h-25" id="heading{{i.date}}" style="background-color:#1f96e0 !important; padding:0.25rem 0.5rem;">
+                                    <h5 class="mb-0" data-toggle="collapse" data-target=#{{i.date}} aria-expanded="true" aria-controls="collapseOne">
+                                        <button class="btn btn-link btn-sm">
+                                            <span style="font-size:12px; text-align: center; font-weight:bold; color:white;">{{i.day | upper}} ({{i.date}})</span>
+                                        </button>
+                                        <span style="font-size:13px; margin-top: 9px; float:right; text-align: text-align: center; font-weight:bold; background-color:red; color:white;">{{i.count}}</span>
+                                    </h5>
+                                </div>
+                                <div id={{i.date}} class="collapse show" aria-labelledby="headingOne" data-parent="#accordion">
+                                    <div class="card-body" style="padding:0;">
+                                    {% if i.count > 0 %}
+                                        <table class="style4">
+                                            <tbody>
+                                                <tr class="headlcn">
+                                                    <td class="SubHead15" style="text-align: center;" width="10%">
+                                                        Thời gian/Địa điểm</td>
+                                                    <td class="SubHead15" align="center" width="30%">
+                                                        Nội dung</td>
+                                                    <td class="SubHead15" align="center" width="15%">
+                                                        Chuẩn bị</td>
+                                                    <td class="SubHead15" align="center" width="15%">
+                                                        Chủ trì</td>
+                                                    <td class="SubHead15" align="center" width="20%">
+                                                        Thành phần tham gia</td>
+                                                    <td class="SubHead15" align="center" width="10%" style="text-align: center;">
+                                                        Duyệt lịch
+                                                    </td>
+                                                </tr>
+                                                {% for j in calender %}
+                                                    {% if i.date == j.date %}
+                                                <tr>
+                                                    <td style="text-align: center;" width="10%">
+                                                        <span class="SubHead12" style="font-size:11px; font-weight:bold;" id="">{{j.starttime}} - {{j.endtime}}</span></br>
+                                                        {% include "calender/meetting_status.html" %}
+                                                        {% if 2 in group_list %}
+                                                            <a href="/admin/calender/draft/{{ j.id }}/change/" title="Chỉnh sửa lịch">
+                                                                <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
+                                                            </a>
+                                                            <a data-toggle="modal" data-target="#myModalDelete" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" title="Xoá lịch" class="delete-idcalender" href="#Delete">
+                                                                <i class="fa fa-trash fa-lg" aria-hidden="true"></i>
+                                                            </a>
+                                                        {% else %}
+                                                            {% if j.status == "NEW" %}
+                                                                <a href="/admin/calender/draft/{{ j.id }}/change/" title="Chỉnh sửa lịch">
+                                                                    <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
+                                                                </a>
+                                                                <a data-toggle="modal" data-target="#myModalDelete" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" title="Xoá lịch" class="delete-idcalender" href="#Delete">
+                                                                    <i class="fa fa-trash fa-lg" aria-hidden="true"></i>
+                                                                </a>
+                                                            {% endif %}
+                                                        {% endif %}
+                                                    </td>
+                                                    <td width="30%">
+                                                        <span>
+                                                            {% if j.requirement1  %}
+                                                                <i class="fa fa-video-camera fa-sm" style="color:red" aria-hidden="true"></i>
+                                                            {% endif %}
+                                                            {% if j.requirement2 %}
+                                                                <i class="fa fa-desktop fa-sm" style="color:orange" aria-hidden="true"></i>
+                                                            {% endif %}
+                                                            {% if j.requirement4 %}
+                                                                <i class="fa fa-coffee fa-sm" style="color:brown" aria-hidden="true"></i>
+                                                            {% endif %}
+                                                            {{j.content}}
+                                                        </span><br/>
+                                                        {% for file in j.multi_file %}
+                                                            <a data-toggle="tooltip" target="_blank" title="{{file.2}}" name="download" href="/files/{{ file.1 }}" value="{{file.1}}">{{file.1}}</a>&nbsp;
+                                                        {% endfor %}
+                                                        {% if j.status == "ACCEPT" or j.status == "DONE" %}
+                                                            <a data-toggle="modal" data-target="#myModal" data-id="{{ j.id }}" data-date="{{ date }}" title="Bổ sung file đính kèm" class="feed-id" href="#UploadFile"><i class="fa fa-upload"></i> Upload File</a>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td width="15%">
+                                                        <span>
+                                                            {{ j.prepare_unit|join:", " }}
+                                                            {% if j.other_prepare %}
+                                                                {% if j.prepare_unit %}
+                                                                    , {{ j.other_prepare }}
+                                                                {% else %}
+                                                                    {{ j.other_prepare }}
+                                                                {% endif %}
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td width="15%">
+                                                        <span>{{j.name}}</span>
+                                                    </td>
+                                                    <td width="20%">
+                                                        <span>
+                                                            {{ j.join_component|join:", " }}
+                                                            {% if j.other_component %}
+                                                                {% if j.join_component %}
+                                                                    , {{ j.other_component }}
+                                                                {% else %}
+                                                                    {{ j.other_component }}
+                                                                {% endif %}
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td width="10%">
+                                                        <input class="checkbox" name="check" type="checkbox" value="{{ j.id }}" style="display: inline-block;"
+                                                            {% if j.check_calender %}
+                                                            checked
+                                                            {% endif %}
+                                                            {% if 1 in group_list and 2 not in group_list %}
+                                                                disabled
+                                                            {% endif %}
+                                                        />
+                                                        {% if j.check_calender %}
+                                                            <span>Lịch đã duyệt</span>
+                                                        {% else %}
+                                                            <span>Duyệt lịch</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <!-- The Modal delete-->
+                        <div class="modal face" data-backdrop="false" data-background="false" id="myModalDelete">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                <form id="fdeletecalender" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                    <!-- Modal Header -->
+                                    <div class="modal-header">
+                                        <h4 class="modal-title">Xoá lịch</h4>
+                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                    </div>
+                                    
+                                    <!-- Modal body -->
+                                    <div class="modal-body confirm-delete">
+                                        <input type="hidden" id="idcalender_delete" name="idcalender_delete">
+                                        <p>Bạn có muốn xoá lịch với ngày giờ: <strong><span id="spidcalender_delete"></span></strong> này không?</p>
+
+                                        <!-- Image loader -->
+                                        <div id='loader' style="display: none; float: center; text-align: center;">
+                                            <img src="{% static 'calender/images/loading.gif' %}" width='64px' height='64px'>
+                                        </div>
+                                        <!-- Image loader -->
+
+                                    </div>
+                                    
+                                    <!-- Modal footer -->
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-undo" aria-hidden="true"></i> Cancel</button>
+                                        <button type="button" class="btn btn-danger" data-dismiss="modal" id="confirmDeleteButtonModal"><i class="fa fa-trash" aria-hidden="true"></i> Delete</button>
+                                    </div>
+                                </form>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- The Modal -->
+                        <div class="modal face" data-backdrop="false" data-background="false" id="myModal">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                <form id="fuploadfile" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                    <!-- Modal Header -->
+                                    <div class="modal-header">
+                                        <h4 class="modal-title">Cập nhật file đính kèm</h4>
+                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                    </div>
+                                    
+                                    <!-- Modal body -->
+                                    <div class="modal-body">
+                                        <input type="hidden" id="date" name="date">
+                                        <input type="hidden" id="idcalender" name="idcalender">
+                                        <div class="custom-file">
+                                            <input type="file" class="custom-file-input" name='arrFile[]' id="customFile" onchange="Filevalidation()">
+                                            <label class="custom-file-label" for="customFile">Choose file</label>
+                                        </div>
+                                        <!-- Progress bar -->
+                                        <div class="progress" style="display:none;">
+                                            <div class="progress-bar progress-bar-striped" role="progressbar" style="width: 10%" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <!-- Display upload status -->
+                                        <div id="uploadStatus"></div>
+                                                    
+                                        <!-- Image loader -->
+                                        <div id='loader' style="display: none; float: center; text-align: center;">
+                                            <img src="{% static 'calender/images/loading.gif' %}" width='64px' height='64px'>
+                                        </div>
+                                        <!-- Image loader -->
+                                    </div>
+                                    
+                                    <!-- Modal footer -->
+                                    <div class="modal-footer">
+                                        <button type="button" id="submit" class="btn btn-success btn-sm"><i class="fa fa-cloud-upload" aria-hidden="true"></i> Upload file</button>
+                                        <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal"><i class="fa fa-times-circle" aria-hidden="true"></i> Close</button>
+                                    </div>
+                                </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> {% endcomment %}
+            <div class="tab-pane fade show active" id="nav-profile" role="tabpanel" aria-labelledby="nav-profile-tab">
+                <div class="row">
+                    <div class="col-md-3">
+                        <form id="myform_draf" method="post">
+                            {% csrf_token %}
+                            <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Tuần lịch</span><br>
+                            <input type="text" onchange="send_draf()" value="{{ date_draf }}" style="height:30px; width:200px;" readonly name="theDate2_draf" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms['myform_draf'].theDate2_draf,'dd-mm-yyyy',this)">
+                        </form>
+                    </div>
+                    <div class="col-md-6 tieudelich">
+                        <span class="badge badge-primary">LỊCH DỰ THẢO TUẦN THỨ {{ week_draf }}</span><br>
+                        <span class="badge badge-info">TỪ NGÀY: {{ start_draf }} ĐẾN NGÀY: {{ end_draf }}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group" style="margin: 1px;float:right;">
+                            <button type="button" id="refresh" class="btn btn-info btn-sm"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button>
+                            <a href="/admin/calender/calender/"><button type="button" class="btn btn-info btn-sm"><i class="fa fa-home" aria-hidden="true"></i> Lịch ban hành</button></a>
+                        </div>
+                    </div>
+                </div>
+                <br/>
+                <div class="row">
+                    <div class="col-md-4">
+                        <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
+                            Đơn vị
+                        </span><br/>
+                        <select class="form-group" style="margin: 1px;width:200px;" id="chair_unit_id">
+                            <option value="0" selected>TẤT CẢ ĐIỆN LỰC</option>
+                            {% if list_chair_unit %}
+                                {% for item in list_chair_unit %}
+                                    <option value="{{item.id}}">{{ item.name | upper }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-3"></div>
+                    <div class="col-md-5 align-self-end ml-auto">
+                        <div class="form-group" style="margin: 1px;float:right; ">   
+                            <a href="/admin/calender/calender/add/"><button type="button" class="btn btn-success btn-sm"><i class="fa fa-calendar-plus-o" aria-hidden="true"></i> Đăng ký lịch</button></a>
+                            <a href="/calender/export_xlsx/?date={{start_draf}}&status=draft-company&depart_id={{department_id}}"><button type="button" class="btn btn-outline-success btn-sm"><i class="fa fa-file-excel-o" aria-hidden="true"></i> In lịch</button></a>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        {% for i in date_list_draf %}
+                        <div id="accordion">
+                            <div class="card">
+                                <div class="card-header bg-primary align-items-left justify-content-center h-25" id="headingdraft{{i.date}}" style="background-color:#1f96e0 !important; padding:0.25rem 0.5rem;">
+                                    <h5 class="mb-0" data-toggle="collapse" data-target=#draft{{i.date}} aria-expanded="true" aria-controls="collapseOne">
+                                        <button class="btn btn-link btn-sm">
+                                            <span style="font-size:12px; text-align: center; font-weight:bold; color:white;">{{i.day | upper}} ({{i.date}})</span>
+                                        </button>
+                                        <span style="font-size:13px; margin-top: 9px; float:right; text-align: text-align: center; font-weight:bold; background-color:red; color:white;">{{i.count}}</span>
+                                    </h5>
+                                </div>
+                                <div id="draft{{i.date}}" class="collapse show" aria-labelledby="headingOne" data-parent="#accordion">
+                                    <div class="card-body" style="padding:0;">
+                                    {% if i.count > 0 %}
+                                        <table class="style4">
+                                            <tbody>
+                                                <tr class="headlcn">
+                                                    <td class="SubHead15" style="text-align: center;" width="10%">
+                                                        Thời gian/Địa điểm</td>
+                                                    <td class="SubHead15"  align="center" width="30%">
+                                                        Nội dung</td>
+                                                    <td class="SubHead15" align="center" width="15%">
+                                                        Chuẩn bị</td>
+                                                    <td class="SubHead15" align="center" width="15%">
+                                                        Chủ trì</td>
+                                                    <td class="SubHead15" align="center" width="20%">
+                                                        Thành phần tham gia</td>
+                                                    <td class="SubHead15" align="center" width="10%" style="text-align: center;">
+                                                        Duyệt lịch
+                                                    </td>
+                                                </tr>
+                                                {% for j in calender_draf %}
+                                                    {% if i.date == j.date %}
+                                                <tr>
+                                                    <td style="text-align: center;" width="10%">
+                                                        <span class="SubHead12" style="font-size:11px; font-weight:bold;" id="">{{j.starttime}} - {{j.endtime}}</span><br/>
+                                                        {% include "calender/meetting_status.html" %}
+                                                        {% if 2 in group_list and duid == j.create_depart_id_id %}
+                                                            <a href="/admin/calender/draft/{{ j.id }}/change/" title="Chỉnh sửa lịch">
+                                                                <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
+                                                            </a>
+                                                            {% comment %} <a data-toggle="modal" data-target="#myModalDelete" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" title="Xoá lịch" class="delete-idcalender" href="#Delete">
+                                                                <i class="fa fa-trash fa-lg" aria-hidden="true"></i>
+                                                            </a> {% endcomment %}
+                                                        {% endif %}
+                                                    </td>
+                                                    <td width="30%">
+                                                        <span>
+                                                            {% if j.requirement1  %}
+                                                                <i class="fa fa-video-camera fa-sm" style="color:red" aria-hidden="true"></i>
+                                                            {% endif %}
+                                                            {% if j.requirement2 %}
+                                                                <i class="fa fa-desktop fa-sm" style="color:orange" aria-hidden="true"></i>
+                                                            {% endif %}
+                                                            {% if j.requirement4 %}
+                                                                <i class="fa fa-coffee fa-sm" style="color:brown" aria-hidden="true"></i>
+                                                            {% endif %}
+                                                            {{j.content}}
+                                                            {{j.contents}}
+                                                        </span><br/>
+                                                        {% for file in j.multi_file %}
+                                                            <a data-toggle="tooltip" target="_blank" title="{{file.2}}" name="download" href="/files/{{ file.1 }}" value="{{file.1}}">{{file.1}}</a>&nbsp;
+                                                        {% endfor %}
+                                                    </td>
+                                                    <td width="15%">
+                                                        <span>
+                                                            {{ j.prepare_unit|join:", " }}
+                                                            {% if j.other_prepare %}
+                                                                {% if j.prepare_unit %}
+                                                                    , {{ j.other_prepare }}
+                                                                {% else %}
+                                                                    {{ j.other_prepare }}
+                                                                {% endif %}
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td width="15%">
+                                                        <span>{{j.name}}</span>
+                                                    </td>
+                                                    <td width="20%">
+                                                        <span>
+                                                            {{ j.join_component|join:", " }}
+                                                            {% if j.other_component %}
+                                                                {% if j.join_component %}
+                                                                    , {{ j.other_component }}
+                                                                {% else %}
+                                                                    {{ j.other_component }}
+                                                                {% endif %}
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td width="10%">
+                                                        <input class="checkbox_draf" name="check_draf" type="checkbox" value="{{ j.id }}" disabled style="display: inline-block;"
+                                                        {% if j.check_calender_letter %}
+                                                        checked
+                                                        {% endif %} />
+                                                        {% if j.check_calender_letter %}
+                                                            <span>Lịch đã duyệt</span>
+                                                        {% else %}
+                                                            <span>Chưa duyệt lịch</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endif %}
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <!-- The Modal delete-->
+                        <div class="modal face" data-backdrop="false" data-background="false" id="myModalDelete">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                <form id="fdeletecalender" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                    <!-- Modal Header -->
+                                    <div class="modal-header">
+                                        <h4 class="modal-title">Xoá lịch</h4>
+                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                    </div>
+                                    
+                                    <!-- Modal body -->
+                                    <div class="modal-body confirm-delete">
+                                        <input type="hidden" id="idcalender_delete" name="idcalender_delete">
+                                        <p>Bạn có muốn xoá lịch với ngày giờ: <strong><span id="spidcalender_delete"></span></strong> này không?</p>
+
+                                        <!-- Image loader -->
+                                        <div id='loader' style="display: none; float: center; text-align: center;">
+                                            <img src="{% static 'calender/images/loading.gif' %}" width='64px' height='64px'>
+                                        </div>
+                                        <!-- Image loader -->
+
+                                    </div>
+                                    
+                                    <!-- Modal footer -->
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-undo" aria-hidden="true"></i> Hủy</button>
+                                        <button type="button" class="btn btn-danger" data-dismiss="modal" id="confirmDeleteButtonModal"><i class="fa fa-trash" aria-hidden="true"></i> Xóa</button>
+                                    </div>
+                                </form>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- The Modal -->
+                        <div class="modal face" data-backdrop="false" data-background="false" id="myModal">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                <form id="fuploadfile" method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                    <!-- Modal Header -->
+                                    <div class="modal-header">
+                                        <h4 class="modal-title">Cập nhật file đính kèm</h4>
+                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                    </div>
+                                    
+                                    <!-- Modal body -->
+                                    <div class="modal-body">
+                                        <input type="hidden" id="date" name="date">
+                                        <input type="hidden" id="idcalender" name="idcalender">
+                                        <div class="custom-file">
+                                            <input type="file" class="custom-file-input" name='arrFile[]' id="customFile" onchange="Filevalidation()">
+                                            <label class="custom-file-label" for="customFile">Choose file</label>
+                                        </div>
+                                        <!-- Progress bar -->
+                                        <div class="progress" style="display:none;">
+                                            <div class="progress-bar progress-bar-striped" role="progressbar" style="width: 10%" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <!-- Display upload status -->
+                                        <div id="uploadStatus"></div>
+                                                    
+                                        <!-- Image loader -->
+                                        <div id='loader' style="display: none; float: center; text-align: center;">
+                                            <img src="{% static 'calender/images/loading.gif' %}" width='64px' height='64px'>
+                                        </div>
+                                        <!-- Image loader -->
+                                    </div>
+                                    
+                                    <!-- Modal footer -->
+                                    <div class="modal-footer">
+                                        <button type="button" id="submit" class="btn btn-success btn-sm"><i class="fa fa-cloud-upload" aria-hidden="true"></i> Upload file</button>
+                                        <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal"><i class="fa fa-times-circle" aria-hidden="true"></i> Close</button>
+                                    </div>
+                                </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'calender/js/jquery.min-3.5.1.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/dhtmlgoodies_calendar.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/bootstrap.min.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/jquery.form.min.js' %}" type="text/javascript"></script>
+
+<script type="text/javascript">
+    // Add the following code if you want the name of the file appear on select
+    $(".custom-file-input").on("change", function() {
+        var fileName = $(this).val().split("\\").pop();
+        $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
+    });
+    Filevalidation = () => { 
+        const fi = document.getElementById('customFile'); 
+        var ext = fi.files[0].name.split('.').pop().toLowerCase();
+        if ($.inArray(ext, ['pdf', 'gif', 'png', 'jpg', 'jpeg', 'zip', 'rar', 'doc', 'docx', 'xls', 'xlsx', 'pptx']) == -1){
+            alert("File <" + fi.files[0].name + "> không đúng định dạng, hãy chọn lại file có định dạng: (PDF/DOC/DOCX/XLS/XLSX/JPEG/JPG/PNG/GIF/ZIP/RAR/PPTX)");
+            $('input').val("");
+            return;
+        }
+        // Check if any file is selected. 
+        if (fi.files[0].size > 0) {
+            const fsize = fi.files[0].size; 
+            const file = Math.round((fsize / 1024)); 
+            // The size of the file. 
+            if (file >= 1048576) { 
+                alert("File quá lớn, hãy chọn lại file có dung lượng nhỏ hơn hoặc bằng 1GB");
+                $('input').val("");
+                return;
+            }
+        }
+    };
+    function send(){
+        var dmy = document.forms["myform"]["theDate2"].value;
+        //alert(dmy);
+        $.ajax({
+            async: false,
+            url: "/calender/week/",
+            type: "POST",
+            data: {
+                date: dmy
+            },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(data) {
+                $("#nav-home").replaceWith(data);
+            },
+            error: function(xhr, status, error){
+                var errorMessage = xhr.status + ': ' + xhr.statusText
+                alert('Error - ' + errorMessage);
+            }
+        });
+    }
+    function send_draf(){
+        var dmy_draf = document.forms["myform_draf"]["theDate2_draf"].value;
+        //alert(dmy_draf);
+        var e = document.getElementById("chair_unit_id");
+        var value = e.options[e.selectedIndex].value;
+        $.ajax({
+            async: false,
+            url: "/calender/week_draf/",
+            type: "POST",
+            data: {
+                value: value,
+                date: dmy_draf,
+                start : dmy_draf
+            },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(data) {
+                $("#nav-profile").replaceWith(data);
+            },
+            error: function(xhr, status, error){
+                var errorMessage = xhr.status + ': ' + xhr.statusText
+                alert('Error - ' + errorMessage);
+            }
+        });
+    }
+    $(document).ready(function(){
+        // Xóa checkbox trùng do jet lib
+        $('input[type="checkbox"]').next('label').remove();
+        // Xóa select nhập do jet lib
+        $('select[id="chair_unit_id"]').removeClass('select2-hidden-accessible');
+        $('select[id="chair_unit_id"]').next('span').remove();
+
+        $("#chair_unit_id").val({{ department_id }});
+
+        $('body').on('click', '.feed-id',function(){
+            document.getElementById("idcalender").value = $(this).attr('data-id');
+            document.getElementById("date").value = $(this).attr('data-date');
+            //console.log($(this).attr('data-id'));
+        });
+        $('body').on('click', '.delete-idcalender',function(){
+            document.getElementById("idcalender_delete").value = $(this).attr('data-id');
+            document.getElementById("spidcalender_delete").innerHTML = $(this).attr('data-date') + " " + $(this).attr('data-start');
+        });
+        $("#confirmDeleteButtonModal").on('click',function(){
+            var idcalender = document.getElementById("idcalender_delete").value;
+            var iddate = '{{ date }}'
+            $.ajax({
+                beforeSend: function(){
+                    // Show image container
+                    $("#loader").show();
+                },
+                url: '/calender/confirmDelete/',
+                type: 'POST',
+                data: 
+                {
+                    idcalender: idcalender,
+                    date: iddate
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                success: function(data) {
+                    //alert(data);
+                    $('#myModal').modal('hide');
+                    $('.modal-backdrop').remove();
+                    $("#nav-home").replaceWith(data);
+                },
+                error: function(jqXHR, textStatus, errorMessage) {
+                    console.log(errorMessage); // Optional
+                },
+                complete:function(data){
+                    // Hide image container
+                    $("#loader").hide();
+                }
+            });
+        });
+        $('#refresh').click(function() { 
+            var dmy_draf = document.forms["myform_draf"]["theDate2_draf"].value;
+            //alert(dmy_draf);
+            var e = document.getElementById("chair_unit_id");
+            var value = e.options[e.selectedIndex].value;
+            $.ajax({
+                async: false,
+                url: "/calender/week_draf/",
+                type: "POST",
+                data: {
+                    value: value,
+                    date: dmy_draf,
+                    start : dmy_draf
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function(data) {
+                    $("#nav-profile").replaceWith(data);
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Error - ' + errorMessage);
+                }
+            });
+        });
+        $("#submit").on('click',function(){
+            var idcalender = document.getElementById("idcalender").value;
+            var iddate = '{{ date }}'
+            var fileInput = document.getElementById('customFile');
+
+            var formData = new FormData();
+
+            for(var i = 0; i < fileInput.files.length; i ++) {
+                formData.append('arrFile[]', fileInput.files[i]);
+            }
+            //console.log(filename);
+            if (fileInput.files.length == 0)
+                return alert("Vui lòng chọn tệp !");
+            formData.append('idcalender', idcalender);
+            formData.append('date', iddate);
+
+            $.ajax({
+                beforeSend: function(){
+                    // Show image container
+                    $("#loader").show();
+                },
+                xhr: function() {
+                    $('.progress').css("display",'block');
+                    var xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener("progress", function (evt) {
+                        if (evt.lengthComputable) {
+                            var percentComplete = evt.loaded / evt.total;
+                            console.log(percentComplete);
+                            $('.progress-bar').css({
+                                width: percentComplete * 100 + '%'
+                            });
+                            if (percentComplete === 1) {
+                                $('.progress').addClass('hide');
+                            }
+                        }
+                    }, false);
+                    xhr.addEventListener("progress", function (evt) {
+                        if (evt.lengthComputable) {
+                            var percentComplete = evt.loaded / evt.total;
+                            console.log(percentComplete);
+                            $('.progress-bar').css({
+                                width: percentComplete * 100 + '%'
+                            });
+                        }
+                    }, false);
+                    return xhr;
+                },
+                url: '/calender/uploadfile/',
+                type: 'POST',
+                //contentType: "multipart/form-data",
+                data: formData,
+                cache: false,
+                processData: false,
+                contentType: false,
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                success: function(data) {
+                    //alert(data);
+                    $('#myModal').modal('hide');
+                    $('.modal-backdrop').remove();
+                    $("#nav-home").replaceWith(data)
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Error - ' + errorMessage);
+                },
+                complete:function(data){
+                    // Hide image container
+                    $("#loader").hide();
+                },
+                clearForm: true,
+                resetForm: true
+            });
+        });
+        
+        $('#browsecalender').click(function() { 
+            //alert("duyệt");
+            var listIdCalender = [];
+            $.each($("input[name='check']:checked"), function(){
+                listIdCalender.push($(this).val());
+            });
+            var listIdCalender_notCheck = [];
+            $.each($("input[name='check']:not(:checked)"), function(){
+                listIdCalender_notCheck.push($(this).val());
+            });
+            //alert("My favourite sports are: " + listIdCalender_notCheck.join(", "));
+            var calender = '{{ calender }}';
+            if ((calender.length === 0) || (calender === '[]'))
+            {
+                alert("KHÔNG CÓ DỮ LIỆU LỊCH TUẦN ĐỂ DUYỆT. CẢM ƠN !!!");
+            }
+            else
+            {
+                if (listIdCalender.length === 0)
+                {
+                    alert("BẠN PHẢI CHỌN LỊCH TUẦN ĐỂ DUYỆT. CẢM ƠN !!!");
+                }else{
+                    date = '{{ date }}';
+                    start = '{{ start }}';
+                    //alert(date);
+                    $.ajax({
+                        url: '/calender/browse/',
+                        type: 'POST',
+                        data:
+                        {
+                            json_data: JSON.stringify({ info: {'date': date, 'start': start, 'listIdCalender': listIdCalender, 'listIdCalender_notCheck': listIdCalender_notCheck} })
+                        },
+                        headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                        success: function (result) {
+                            //setTimeout(function(){// wait for 5 secs(2)
+                            //    location.reload();// then reload the page.(3)
+                            //}, 1);
+                            $("#nav-home").replaceWith(result);
+                            alert("BẠN ĐÃ DUYỆT " + listIdCalender.length + " LỊCH THÀNH CÔNG. CẢM ƠN !!!");
+                        },
+                        error: function(xhr, status, error){
+                            var errorMessage = xhr.status + ': ' + xhr.statusText
+                            alert('Error - ' + errorMessage);
+                        }
+                    });
+                }
+            }
+        });
+
+        $('#cancelcalender').click(function() { 
+            //alert("Huỷ")
+            var listIdCalender = [];
+            $.each($("input[name='check']:not(:checked)"), function(){
+                listIdCalender.push($(this).val());
+            });
+            if (listIdCalender.length === 0)
+            {
+                alert("BẠN PHẢI BỎ CHỌN LỊCH TUẦN ĐỂ HUỶ DUYỆT LỊCH. CẢM ƠN !!!");
+            }
+            else
+            {
+                date = '{{ date }}';
+                start = '{{ start }}';
+                console.log(start);
+                $.ajax({
+                    url: '/calender/cancel/',
+                    type: 'POST',
+                    data:
+                    {
+                        json_data: JSON.stringify({ info: {'date': date,'start': start,'listIdCalender': listIdCalender} })
+                    },
+                    headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                    success: function (result) {
+                        //setTimeout(function(){// wait for 5 secs(2)
+                        //        location.reload(); // then reload the page.(3)
+                        //    }, 1); 
+                        $("#nav-home").replaceWith(result);
+                        alert("BẠN ĐÃ HUỶ DUYỆT " + listIdCalender.length + " LỊCH THÀNH CÔNG. CẢM ƠN !!!");
+                    },
+                    error: function(xhr, status, error){
+                            var errorMessage = xhr.status + ': ' + xhr.statusText
+                            alert('Error - ' + errorMessage);
+                        }
+                });
+            }
+        });
+
+        $('#chair_unit_id').change(function(){
+            var e = document.getElementById("chair_unit_id");
+            var value = e.options[e.selectedIndex].value;
+            $.ajax({
+                url: "/calender/week_draf/",
+                type: "POST", // or "get"
+                data: 
+                {
+                    value: value,
+                    date: '{{ date_draf }}',
+                    start : '{{ start_draf }}'
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                success: function(data) {
+                    //alert(data)
+                    $("#nav-profile").replaceWith(data)
+                },
+                error: function(e){
+                    
+                }
+            });
+        });
+
+        $('#checked_all_draf').on('click',function(){
+            if(this.checked){
+                $('.checkbox_draf').each(function(){
+                    this.checked = true;
+                });
+            }else{
+                $('.checkbox_draf').each(function(){
+                    this.checked = false;
+                });
+            }
+        });
+        $('.checkbox_draf').on('click',function(){
+            if($('.checkbox_draf:checked').length == $('.checkbox_draf').length){
+                $('#checked_all_draf').prop('checked',true);
+            }else{
+                $('#checked_all_draf').prop('checked',false);
+            }
+        });
+    });
+    
+    // Set check or unchecked all checkboxes
+    function checkAll(e) {
+        var checkboxes = document.getElementsByName('check');
+        if (e.checked) {
+            for (var i = 0; i < checkboxes.length; i++) { 
+            checkboxes[i].checked = true;
+            }
+        } else {
+            for (var i = 0; i < checkboxes.length; i++) {
+            checkboxes[i].checked = false;
+            }
+        }
+    }
+    //deselect "checked all", if one of the listed checkbox product is unchecked amd select "checked all" if all of the listed checkbox product is checked
+    $('.checkbox').change(function(){ //".checkbox" change 
+        if($('.checkbox:checked').length == $('.checkbox').length){
+            $('.checked_all').prop('checked',true);
+        }else{
+            $('.checked_all').prop('checked',false);
+        }
+    });
+</script>
+
+{% endblock %}

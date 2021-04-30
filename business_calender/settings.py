@@ -171,8 +171,8 @@ WSGI_APPLICATION = 'business_calender.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'sql_server.pyodbc',
-        # 'NAME': 'calender_13_office',
-        'NAME': 'calender_dl',
+        'NAME': 'calender',
+        # 'NAME': 'calender_dl',
         'HOST': 'DESKTOP-1LRH31L\SQLEXPRESS',
         'PASSWORD': '@123abc#',
         'USER': 'sa',

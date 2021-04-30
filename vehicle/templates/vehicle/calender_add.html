@@ -137,6 +137,20 @@
                                 <p class="help">{{ form.note.help_text }}</p>
                             </div>
                         </div>
+
+                        <div class="form-row field-is_appr_manager">
+                            <div>
+                                {{ form.is_appr_manager }}
+                                {{ form.is_appr_manager.label_tag|cut:":" }}
+                                {% comment %} <p class="help">{{ form.is_appr_manager.help_text }}</p> {% endcomment %}
+                            </div>
+                        </div>
+                        <div class="form-row field-managers" style="display:none;">
+                            <div>
+                                {{ form.approved_by_.label_tag }}
+                                {{ form.approved_by_ }}
+                            </div>
+                        </div>
                     </fieldset>
                 </div>
             </div>

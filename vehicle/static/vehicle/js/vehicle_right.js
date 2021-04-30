@@ -54,6 +54,7 @@ $(document).ready(function () {
                     },
                     headers: {'X-CSRFToken': $("input[name='csrfmiddlewaretoken']").val()}, 
                     success: function (resp) {
+                        var data = JSON.parse(resp);
                         if (resp == "true") {
                             Swal.fire(
                                 'Duyệt!',
@@ -61,16 +62,24 @@ $(document).ready(function () {
                                 'success'
                             )
                             location.reload();
-                        } else {
+                        } else if (resp == "false") {
                             Swal.fire(
                                 'Sorry!',
                                 'Bạn đã duyệt không thành công!',
                                 'warning'
                             )
+                        } else {
+                            for (var i=0; i<data.length; i++) {
+                                Swal.fire(
+                                    'Sorry!',
+                                    'Bạn không có quyền để duyệt lịch với nội dung "' + data[i].content +'"',
+                                    'warning'
+                                )
+                            }
                         }
                     },
                     error: function(xhr, status, error){
-                        var errorMessage = xhr.status + ': ' + xhr.statusText
+                        var errorMessage = xhr.status + ': ' + error
                         alert('Error - ' + errorMessage);
                     }
                 });

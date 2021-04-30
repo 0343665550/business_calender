@@ -1,6 +1,6 @@
 <!-- If user is "LÃNH ĐẠO" and user department is in join components or parent dep -->
 
-{% if 3 in group_list and department_id in j.join_component_ids or parent_id in j.join_component_ids %}
+{% if 2 in group_list and department_id in j.join_component_ids or parent_id in j.join_component_ids %}
     <a data-toggle="modal" data-target="#myModalDivision{{ j.id }}" data-division-id="{{ j.id }}" title="Phân công dự họp" class="working_division" style="background-color:#3d98ef;color:white;" href="#AssignMeeting"><i class="fa fa-bell-o" aria-hidden="true"></i> Phân công</a>
     <!-- The Modal Phân công Dự họp-->
     <div class="modal face" id="myModalDivision{{ j.id }}" data-backdrop="false" data-background="false">

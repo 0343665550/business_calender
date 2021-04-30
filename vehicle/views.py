@@ -3,12 +3,13 @@ from datetime import datetime, timedelta
 from django.views import View
 from django.http import HttpResponse
 from django.views.generic import DetailView
-from calender.views import connect_sql, start_end_of_week, addOneDate, convertDate, week, convertNumberWeek, getGroupUserId, no_accent
+from calender.views import connect_sql, start_end_of_week, addOneDate, convertDate, week, \
+    convertNumberWeek, getGroupUserId, no_accent, execute_sql
 from calender.models import *
 from .models import VehicleCalender as ModelVehicleCalender, Vehicle, Vehicle_Division, Driver_Division
 from .forms import CalenderUpdateDetailForm, CalenderDisableForm, CalenderAddForm
 import json, logging, xlsxwriter
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 # Create your views here.
 
 # Saving error logs in file "vehicle_log"
@@ -282,22 +283,45 @@ class VehicleCalender(View):
 def update_detail_view(request, cid):
     try:
         calender = ModelVehicleCalender.objects.get(id=cid)
+        status_before_edit = calender.status
         register = User.objects.get(id=calender.create_uid.id).last_name or User.objects.get(id=calender.create_uid.id).username
         register_unit = Department.objects.get(id=calender.register_unit.id).name
+        # if calender.approved_by:
+        #     profile_id = calender.approved_by.id
+        #     user_id = Profile.objects.get(id=calender.approved_by.id).user_id
+        #     print(user_id)
+        approved_by = User.objects.get(id=calender.approved_by.id).last_name if calender.approved_by else '' \
+            or User.objects.get(id=calender.approved_by.id).username if calender.approved_by else '' 
 
         has_perm_assign = request.user.has_perm("vehicle.assign_vehicle")
         # print(calender, register, register_unit)
         if request.method == 'POST':
             form = CalenderUpdateDetailForm(request.POST, instance=calender)
-            disableform = CalenderDisableForm(initial={'register': register, 'register_unit': register_unit})
+            # disableform = CalenderDisableForm(initial={
+            #     'register': register, 
+            #     'register_unit': register_unit, 
+            #     'approved_by': calender.approved_by
+            # })
             if form.is_valid() and form.has_changed():
                 #  and form.has_changed()
                 post = form.save(commit=False)
-                post.week = int(form.cleaned_data['start_time'].strftime("%V")) + 1
+                post.week = int(form.cleaned_data['start_time'].strftime("%V"))
                 post.write_uid = request.user
                 post.write_date = datetime.now()
                 post.save()
                 # print("form error :", form.errors.as_data())
+
+                driver_list = Driver_Division.objects.filter(calender=cid)
+                if post.status == 'CANCEL' and len(driver_list) > 0 and status_before_edit != post.status:
+                    for driver in driver_list:
+                        insert_chat = "INSERT INTO QNaPC_ChangeToChat_PhuongTien(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
+                        execute_sql(insert_chat, cid, 1, datetime.now(), driver.driver.id) # assign id_status=1 temporary
+                    assign_perm_users = User.objects.filter(user_permissions__codename='assign_vehicle')
+                    # print(assign_perm_users)
+                    # Just apply for user, not group has permission
+                    for user in assign_perm_users:
+                        insert_chat = "INSERT INTO QNaPC_ChangeToChat_PhuongTien(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
+                        execute_sql(insert_chat, cid, 1, datetime.now(), user.id) # assign id_status=1 temporary
                 return redirect('/admin/vehicle/vehiclecalender/')
         else:
             if calender.start_time >= datetime.now() and request.user.has_perm("vehicle.assign_vehicle"):
@@ -306,7 +330,15 @@ def update_detail_view(request, cid):
                 form = CalenderUpdateDetailForm(instance=calender)
                 for fieldname in form.fields:
                     form.fields[fieldname].disabled = True
-            disableform = CalenderDisableForm(initial={'register': register, 'register_unit': register_unit})
+        disableform = CalenderDisableForm(initial={
+            'register': register, 
+            'register_unit': register_unit,
+            'approved_by': approved_by
+            # 'approved_by': Profile.objects.filter(user=calender.approved_by.id).values_list('user__last_name', flat=True)[0]
+        })
+        print({'register': register, 
+            'register_unit': register_unit,
+            'approved_by': approved_by})
         context = {
             'form': form,
             'disableform': disableform,
@@ -327,13 +359,22 @@ def add_view(request):
                 post = form.save(commit=False)
                 if request.user.has_perm("vehicle.confirm_vehicle"):
                     post.status = "CONFIRM"
-                post.week = int(form.cleaned_data['start_time'].strftime("%V")) + 1
+                post.week = int(form.cleaned_data['start_time'].strftime("%V"))
+                print(form.cleaned_data)
+                if form.cleaned_data['approved_by_']:
+                    post.approved_by = User.objects.get(id=form.cleaned_data['approved_by_'].user_id)
+                    print(post.approved_by)
+                    
                 # post.register = request.user
                 post.create_uid = request.user
                 register_unit = Profile.objects.get(user=request.user).department_id
                 post.register_unit = Department.objects.get(id=register_unit)   # RESULT IS AN INSTANCE
                 post.create_date = datetime.now()
                 post.save()
+                # Apply for when select approval user
+                if post.approved_by:
+                    insert_chat = "INSERT INTO QNaPC_ChangeToChat_PhuongTien(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
+                    execute_sql(insert_chat, post.id, 1, datetime.now(), post.approved_by.id) # assign id_status=1 temporary
                 return redirect('/admin/vehicle/vehiclecalender/')
             # print("form error :", form.errors.as_data())
         else:
@@ -369,9 +410,28 @@ def approval_action(request):
         if request.method == 'POST':
             json_data = request.POST.get('json_data')
             cid_list = json.loads(json_data)['cid_list']
+            user_id = request.user.pk
+            prohibited_calendar = []
             for cal in cid_list:
-                ModelVehicleCalender.objects.filter(id=cal, status="CONFIRM").update(status="APPROVAL")
-            return HttpResponse("true")
+                calendar = ModelVehicleCalender.objects.get(id=int(cal))
+                if calendar.is_appr_manager and user_id != calendar.approved_by.id:
+                    prohibited_calendar.append({
+                        "content": calendar.content
+                    })
+                    continue
+
+                ModelVehicleCalender.objects.filter(id=int(cal), status="CONFIRM").update(status="APPROVAL")
+                
+                if calendar.is_appr_manager and user_id == calendar.approved_by.id:
+                    assign_perm_users = User.objects.filter(user_permissions__codename='assign_vehicle')
+                    # Just apply for user, not group has permission
+                    for user in assign_perm_users:
+                        insert_chat = "INSERT INTO QNaPC_ChangeToChat_PhuongTien(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
+                        execute_sql(insert_chat, cal, 1, datetime.now(), user.id) # assign id_status=1 temporary
+            if len(prohibited_calendar) == 0:
+                return HttpResponse("true")
+            else:
+                return HttpResponse(json.dumps(prohibited_calendar))
     except Exception as exc:
         print(exc)
         return HttpResponse("false")
@@ -591,7 +651,6 @@ def excel_data(date, department_id, tab_active, status):
         date_data = start_end_of_week(date)
         week = convertNumberWeek(date)
         # status = getCalenderStatus_vt(week)
-        #print(status)
         calender = sql_calender_detail(date, department_id, True if tab_active=="left" else False, status)
         date_list = date_of_week(date, department_id, True if tab_active=="left" else False, status)
         context = {
@@ -602,7 +661,6 @@ def excel_data(date, department_id, tab_active, status):
             'date_list': date_list,
             'calender': calender
         }
-        # print(context)
         return context
     except Exception as exc:
         LoggingFile(exc)

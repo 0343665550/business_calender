@@ -100,11 +100,6 @@ def getWeek_draf(request):
         list_chair_unit = Department.objects.filter(active=True).order_by('group', 'sequence')
         calender = getCalender_draf(start, chair_unit_id)
         date_list = dateOfWeek_draf(start, chair_unit_id)
-        user_id = request.user.pk
-        department = getDepartment(user_id)
-        department_id = department[0]['department_id']
-        group = getGroupUserId(user_id)
-        group_list = [i['group_id'] for i in group]
         context = {
             'date_draf': date,
             'start_draf': data['start'],
@@ -115,9 +110,7 @@ def getWeek_draf(request):
             'list_chair_unit': list_chair_unit,
             'department_id': chair_unit_id,
             'date_list_draf': date_list,
-            'calender_draf': calender,
-            'group_list': group_list,
-            'duid': department_id
+            'calender_draf': calender
         }
         return render(request, "calender/reload_draf.html", context)
 
@@ -132,7 +125,7 @@ def get_status(status_id):
         return "Bổ sung"
     elif status_id == 4:
         return "Đột xuất"
-    elif status_id == 5:
+    elif status_id == 3:
         return "Đổi địa điểm"
     else:
         return "Đổi thời gian"
@@ -243,10 +236,7 @@ def export_xlsx(request):
                 status = get_status(item_info['cancel_status'])
                 worksheet.write(row_count, 1, item_info['starttime']+' - '+item_info['endtime'], format2)
                 worksheet.write(row_count, 2, item_info['meeting_name'] if item_info['meeting_name'] else item_info['address'], format_justify)
-                if item_info['content']:
-                    worksheet.write(row_count, 3, item_info['content'], format_justify)
-                elif item_info['contents']:
-                    worksheet.write(row_count, 3, item_info['contents'], format_justify)
+                worksheet.write(row_count, 3, item_info['content'], format_justify)
                 worksheet.write(row_count, 4, prepare_unit, format2)
                 worksheet.write(row_count, 5, item_info['name'], format2)
                 worksheet.write(row_count, 6, join_component, format_justify)
@@ -593,7 +583,7 @@ def deletefileRelease(request):
                         os.remove(path)
                 except ValueError as e:
                     # print('ValueError: ', e)
-                    continue
+                    break
 
         user_id = request.user.pk
         department = getDepartment(user_id)
@@ -619,6 +609,7 @@ def deletefileRelease(request):
             'date_list': date_list,
             'calender': calender
         }
+        print('context: ', context['date'])
         return render(request, "calender/data.html", context)
    
 
@@ -694,7 +685,7 @@ class Calender(View):
         week = convertNumberWeek(date)
         list_chair_unit = Department.objects.filter(active=True).order_by('group', 'sequence')
         if 3 in group_list:
-            # department_id = '0'
+            department_id = '0'
             # Check approval of the department draft
             status = check_calender_letter(date, department_id)
             # Check approval of the letter draft
@@ -728,7 +719,6 @@ class Calender(View):
                 'list_chair_unit': list_chair_unit,
                 'date_list_evn': date_list_evn,
                 'calender_evn': calender_evn,
-                'duid': department_id
             }
         else:
             group_list =  [i['group_id'] for i in group]
@@ -757,15 +747,14 @@ class Calender(View):
                 'start_draf': data['start'],
                 'end_draf': data['end'],
                 'week_draf': week,
-                'department_id': department_id,
+                'department_id': '0',
                 'status_draf': status_draf,
                 'list_chair_unit': list_chair_unit,
                 'date_list_draf': date_list_draf,
                 'calender_draf': calender_draf,
-                'duid': department_id
             }
-        # print(context)
         if 3 in group_list:
+            #print("calender/letter_draft.html")
             return render(request, "calender/letter_draft.html", context)
         else:
             return render(request, "calender/body.html", context)
@@ -885,7 +874,6 @@ def getCalender(idd, date):
             i['join_component'] = item_join
             i['prepare_unit'] = item_prepare       
             i['multi_file'] = item_files        
-            i['contents'] = get_content_calendar(i['id'])
     # print(data)
     return data
 
@@ -928,7 +916,6 @@ def getCalender_draf(date, chair_unit_id):
             i['join_component'] = item_join
             i['prepare_unit'] = item_prepare
             i['multi_file'] = item_files
-            i['contents'] = get_content_calendar(i['id'])
     return data
 
 def week(name):
@@ -952,7 +939,7 @@ def addOneDate(date):
 
 def convertNumberWeek(date):
     p = datetime.strptime(date, '%d-%m-%Y')
-    return int(p.strftime("%V")) + 1
+    return int(p.strftime("%V"))
 
 @method_decorator(never_cache, name='dispatch')
 class Login(View):
@@ -1106,7 +1093,6 @@ def get_calender_type(date, chair_unit_id, status):
     if data:
         for i in data:
             sql_joins = """select cd.id, cd.name from calender_department cd inner join calender_joincomponent cjc on cd.id = cjc.department_id where cjc.calender_id = %s"""
-            # sql_joins = """select cd.id, cd.name from calender_department cd inner join calender_calender cjc on cd.id = cjc.chair_unit_id where cjc.id = %s"""
             rs_joins = connect_sql(sql_joins, i['id'])
             sql_prepares = """select cd.id, cpu.department_id, cd.name from calender_department cd inner join calender_prepareunit cpu on cd.id = cpu.department_id where cpu.calender_id = %s"""
             rs_prepares = connect_sql(sql_prepares, i['id'])
@@ -1129,7 +1115,6 @@ def get_calender_type(date, chair_unit_id, status):
             i['division_list'] = acronym_depart(rs_division)
             # print("rs_division: %s" %(rs_division))
             i['filter_group'] = group_by_depart(rs_division)
-            i['contents'] = get_content_calendar(i['id'])
             # print(i['filter_group'])
     # print(data)
     return data
@@ -1255,8 +1240,6 @@ def company_draft(request):
         chair_unit_id = request.POST['value']
         data = start_end_of_week(date)
         user_id = request.user.pk
-        department = getDepartment(user_id)
-        department_id = department[0]['department_id']
         group = getGroupUserId(user_id)
         # print('grouppppppppppppp re-render: ', group)
         group_list = [i['group_id'] for i in group]
@@ -1278,8 +1261,7 @@ def company_draft(request):
             'department_id': chair_unit_id,
             'date_list_evn': date_list,
             'calender_evn': calender,
-            'group_list': group_list,
-            'duid': department_id
+            'group_list': group_list
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1296,10 +1278,6 @@ def approval_draft_com(request):
         
         data = start_end_of_week(date)
         user_id = request.user.pk
-        department = getDepartment(user_id)
-        department_id = department[0]['department_id']
-        group = getGroupUserId(user_id)
-        group_list = [i['group_id'] for i in group]
         week = convertNumberWeek(date)
 
         for item in listIdCalender:
@@ -1310,9 +1288,6 @@ def approval_draft_com(request):
             id_status = calendar_item.cancel_status    # QUERYSET IS AWESOME
             valid_time = calendar_item.start_time
             if id_status in [2, 3, 4] and valid_time >= datetime.now():      # [CHANGE, ADDITIONAL, UNEXPECTED]
-                insert_chat = "INSERT INTO QNaPC_ChangeToChat(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
-                execute_sql(insert_chat, item, id_status, datetime.now(), user_id)
-            else:
                 insert_chat = "INSERT INTO QNaPC_ChangeToChat(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
                 execute_sql(insert_chat, item, id_status, datetime.now(), user_id)
 
@@ -1337,9 +1312,7 @@ def approval_draft_com(request):
             'list_chair_unit': list_chair_unit,
             'department_id': chair_unit_id,
             'date_list_evn': date_list,
-            'calender_evn': calender,
-            'group_list': group_list,
-            'duid': department_id
+            'calender_evn': calender
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1365,7 +1338,6 @@ def cancel_approval_draft_com(request):
         status = check_calender_letter(date, chair_unit_id)
         # print(status)
         group = getGroupUserId(user_id)
-        group_list = [i['group_id'] for i in group]
         list_chair_unit = Department.objects.filter(active=True).order_by('group', 'sequence')
         # calender = getCalender(department_id, start)
         # date_list = dateOfWeek(department_id, start)
@@ -1382,9 +1354,7 @@ def cancel_approval_draft_com(request):
             'group': group,
             'status_evn': status,
             'date_list_evn': date_list,
-            'calender_evn': calender,
-            'group_list': group_list,
-            'duid': department_id
+            'calender_evn': calender
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1689,8 +1659,6 @@ class UpdateDeleteExpectedView(RetrieveUpdateDestroyAPIView):
 def confirmUpdateCalender(request):
     if request.method == "POST":
         user_id = request.user.pk
-        department = getDepartment(user_id)
-        department_id = department[0]['department_id']
         date = request.POST['date']
         idcalender = request.POST['idcalender']
         chair_unit_id = request.POST['value']
@@ -1703,13 +1671,6 @@ def confirmUpdateCalender(request):
         if valid_time >= datetime.now():
             insert_chat = "INSERT INTO QNaPC_ChangeToChat(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
             execute_sql(insert_chat, idcalender, id_status, datetime.now(), user_id)
-            # INSERT USERS FOR QNaPC_PhanCongLich
-            division_users = Working_Division.objects.filter(calender=idcalender)
-            for user in division_users:
-                if user.user and user.active == 1:
-                    insert_msg = "INSERT INTO QNaPC_PhanCongLich(username, id_lich, thoigian_phancong, sended, trangthai_huyhoan)  VALUES (%d, %d, '%s', %d, 1)" % (int(user.user.id), int(idcalender), datetime.now(), 0)
-                    # print(insert_msg)
-                    execute_sql(insert_msg)
         data = start_end_of_week(date)
         week = convertNumberWeek(date)
         group = getGroupUserId(user_id)
@@ -1733,8 +1694,7 @@ def confirmUpdateCalender(request):
             'calender': calender,
             'group_list': group_list,
             'list_users': list_users,
-            'expected_list': expectedlist,
-            'department_id': department_id
+            'expected_list': expectedlist
         }
         return render(request, "calender/data.html", context)
 
@@ -1747,8 +1707,6 @@ def confirmRecycleCalender(request):
         execute_sql(sql_update, datetime.now(), idcalender)
         data = start_end_of_week(date)
         user_id = request.user.pk
-        department = getDepartment(user_id)
-        department_id = department[0]['department_id']
         week = convertNumberWeek(date)
         group = getGroupUserId(user_id)
         group_list = [i['group_id'] for i in group]
@@ -1771,8 +1729,7 @@ def confirmRecycleCalender(request):
             'calender': calender,
             'group_list': group_list,
             'list_users': list_users,
-            'expected_list': expectedlist,
-            'department_id': department_id
+            'expected_list': expectedlist
         }
         return render(request, "calender/data.html", context)
 
@@ -1792,8 +1749,7 @@ def check_double_calender(request):
         date1 = (datetime.strptime(date1, '%d-%m-%Y %H:%M')).strftime('%Y-%m-%d %H:%M')
         date2 = request.POST['date2']
         date2 = (datetime.strptime(date2, '%d-%m-%Y %H:%M')).strftime('%Y-%m-%d %H:%M')
-        if request.POST['meeting_id']:
-            meeting_id = request.POST['meeting_id']  
+        meeting_id = request.POST['meeting_id']
         chair_unit_id = request.POST['chair_unit_id']
         if chair_unit_id:
             sql_manager = "select id from calender_department where name like N'GĐPC%' or name like N'%PGĐ KD%' or name like N'%PGĐ KT%' or name like N'%PGĐ ĐTXD%'"
@@ -1881,10 +1837,6 @@ def confirmUndoBrowse(request):
         
         data = start_end_of_week(date)
         user_id = request.user.pk
-        department = getDepartment(user_id)
-        department_id = department[0]['department_id']
-        group = getGroupUserId(user_id)
-        group_list = [i['group_id'] for i in group]
         week = convertNumberWeek(date)
 
         sql2 = "UPDATE calender_calender SET check_calender_letter=0, status='ACCEPT', write_date = %s WHERE id = %s"
@@ -1906,9 +1858,7 @@ def confirmUndoBrowse(request):
             'list_chair_unit': list_chair_unit,
             'department_id': chair_unit_id,
             'date_list_evn': date_list,
-            'calender_evn': calender,
-            'group_list': group_list,
-            'duid': department_id
+            'calender_evn': calender
         }
         return render(request, "calender/company_draft.html", context)
 
@@ -1942,43 +1892,39 @@ def create_expected(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 def check_status(calender_id, form):
-    try:
-        calendar = CalenderModel.objects.get(id=calender_id)
-        # print('calendar.check_calender_letter: ', calendar.check_calender_letter)
-        form_data = form.cleaned_data
-        week = int(form_data['start_time'].strftime('%V')) + 1
-        if calendar.check_calender_letter:
-            
-            default_start_time = calendar.start_time.strftime('%Y-%m-%d %H:%M:%S')
-            default_end_time = calendar.end_time.strftime('%Y-%m-%d %H:%M:%S')
-            # print('default_start_time: ', default_start_time)
-            # print('default_end_time: ', default_end_time)
-            start_time = form_data['start_time'].strftime('%Y-%m-%d %H:%M:%S')
-            end_time = form_data['end_time'].strftime('%Y-%m-%d %H:%M:%S')
-            # print('start_time: ', start_time)
-            # print('end_time: ', end_time)
+    calendar = CalenderModel.objects.get(id=calender_id)
+    # print('calendar.check_calender_letter: ', calendar.check_calender_letter)
+    form_data = form.cleaned_data
+    week = int(form_data['start_time'].strftime('%V'))
+    if calendar.check_calender_letter:
+        
+        default_start_time = calendar.start_time.strftime('%Y-%m-%d %H:%M:%S')
+        default_end_time = calendar.end_time.strftime('%Y-%m-%d %H:%M:%S')
+        # print('default_start_time: ', default_start_time)
+        # print('default_end_time: ', default_end_time)
+        start_time = form_data['start_time'].strftime('%Y-%m-%d %H:%M:%S')
+        end_time = form_data['end_time'].strftime('%Y-%m-%d %H:%M:%S')
+        # print('start_time: ', start_time)
+        # print('end_time: ', end_time)
 
-            default_location = calendar.location_id
-            default_address = calendar.address
-            # print('default_location: ', default_location)
-            # print('default_address: ', default_address)
-            # print('location: ', form_data['location'].id)
-            # print('address: ', form_data['address'])
-            if 'location' in form_data:
-                if form_data['location']:
-                    if default_location != form_data['location'].id:
-                        return week, 5
+        default_location = calendar.location_id
+        default_address = calendar.address
+        # print('default_location: ', default_location)
+        # print('default_address: ', default_address)
+        # print('location: ', form_data['location'].id)
+        # print('address: ', form_data['address'])
 
-            if default_address != form_data['address']:
+        if form_data['location']:
+            if default_location != form_data['location'].id:
                 return week, 5
-            elif start_time != default_start_time or end_time != default_end_time:
-                return week, 6
-            else:
-                return week, 2
-        return week, None
-    except Exception as exc:
-        print(exc)
-        return week, None
+
+        if default_address != form_data['address']:
+            return week, 5
+        elif start_time != default_start_time or end_time != default_end_time:
+            return week, 6
+        else:
+            return week, 2
+    return week, None
 
 def draftEdit(request, pk):
     try:
@@ -2001,13 +1947,17 @@ def draftEdit(request, pk):
             form = CalenderChangeForm(request.POST, instance=calendar)
             disableform = DisableForm(initial={'creater': creater, 'department': department})
             formset = FileFormSet(request.POST, request.FILES, instance=calendar)
-            
+            # print('form.is_valid(): ', form.is_valid())
+            # print('formset.is_valid(): ', formset.is_valid())
+            # print('cleaned_data[start]: ', form.cleaned_data['start_time'])
+            # print('cleaned_data[end]: ', form.cleaned_data['end_time'])
+            # print('form errors: ', form.errors.as_data())
             if form.is_valid() and formset.is_valid():
                 if form.has_changed():
                     # data = form.save(commit=False)
                     response_status = check_status(pk, form)
                     update_query_manual(pk, form)
-                    
+                    # print(response_status)
                     # Nếu status != None thì update lịch ban hành
                     # Còn không thì update week lịch dự thảo
                     if response_status[1] != None:
@@ -2023,7 +1973,7 @@ def draftEdit(request, pk):
                 return HttpResponseRedirect('/admin/calender/draft')
         else:
             if calendar.start_time >= datetime.now():
-                form = CalenderChangeForm(instance=calendar, user_id=request.user.pk)
+                form = CalenderChangeForm(instance=calendar)
             else:
                 form = CalenderChangeForm(instance=calendar)
                 for fieldname in form.fields:
@@ -2040,7 +1990,7 @@ def draftEdit(request, pk):
         return render(request, 'calender/calender_edit.html', context)
     except Exception as exc:
         print(exc)
-        # return HttpResponseRedirect('/admin/calender/draft')
+        return HttpResponseRedirect('/admin/calender/draft')
 
 # SHOULD BE USE CLASS BASED VIEWS INSTEAD OF CLASS BASED VIEWS
 class CalenderList(ListView):
@@ -2070,6 +2020,7 @@ class CalenderCreateView(CreateView):
     success_url = '/'
 
     def form_valid(self, form):
+        print('formmmmmmmmmmmmmmmm:')
         form.save()
         formset.save()
         return super().form_valid(form)
@@ -2174,9 +2125,9 @@ def confirm_division(request):
                     # print("======INSERT=============")
                     insert = Working_Division(calender=CalenderModel.objects.get(id=calender_id), user=User.objects.get(id=user), active=True, create_uid=request.user)
                     insert.save()
-                    insert_msg = "INSERT INTO QNaPC_PhanCongLich(username, id_lich, thoigian_phancong, sended, trangthai_huyhoan)  VALUES (%d, %d, '%s', %d, 0)" % (int(user), int(calender_id), datetime.now(), 0)
+                    # insert_msg = "INSERT INTO QNaPC_PhanCongLich(username, id_lich, thoigian_phancong, sended)  VALUES (%d, %d, '%s', %d)" % (int(user), int(calender_id), datetime.now(), 0)
                     # print(insert_msg)
-                    execute_sql(insert_msg)
+                    # execute_sql(insert_msg)
                 else:
                     # print("======UPDATE==============")
                     Working_Division.objects.filter(calender=calender_id, user=int(user)).update(active=True, write_uid=user_id, write_date=datetime.now())  
@@ -2241,8 +2192,7 @@ def group_by_depart(user_list):
     final_result = []
     for i in result:
         urs = ", ".join(i['user'])
-        #final_result.append("<b>" + i['name'] + "</b>" + " (" + urs + ")")
-        final_result.append("" + urs + "")
+        final_result.append("<b>" + i['name'] + "</b>" + " (" + urs + ")")
     return final_result
     # BQLDA(Phạm Văn Hồng, Lê Văn Thái, Lê Ngọc Trường)
     # ...
@@ -2251,7 +2201,6 @@ def update_query_manual(pk, form):
     try:
         # Get all changed fields in form and compare 
         change_fields = form.changed_data
-        print(change_fields)
         if 'join_component' in change_fields:
             sql = "delete calender_joincomponent where calender_id = %s"
             execute_sql(sql, pk)
@@ -2264,18 +2213,12 @@ def update_query_manual(pk, form):
             for unit in form.cleaned_data['prepare_unit']:
                 sql_insert = "insert into calender_prepareunit(calender_id, department_id) values(%s, %s)"
                 execute_sql(sql_insert, pk, str(unit.id))
-        if 'content_ids' in change_fields:
-            sql = "delete calender_content where calender_id = %s"
-            execute_sql(sql, pk)
-            for cont in form.cleaned_data['content_ids']:
-                sql_insert = "insert into calender_content(calender_id, calendarcontent_id) values(%s, %s)"
-                execute_sql(sql_insert, pk, str(cont.id))
         # print(change_fields)
         str_field = ""
         params = []
         # Target of for loop is get 2 value to fill the query below without ['join_component', 'prepare_unit']
         for field in change_fields:
-            if field in ['join_component', 'prepare_unit', 'content_ids']:
+            if field in ['join_component', 'prepare_unit']:
                 continue
             field_name = field if field not in ['location', 'chair_unit'] else field + "_id"        # special case _id
             str_field += field_name + " = %s,"
@@ -2302,16 +2245,3 @@ def update_query_manual(pk, form):
     except Exception as exc:
         print(exc)
         return False
-
-def get_content_calendar(calendar_id):
-    try:
-        sql = """select cd.name from calender_calendarcontent cd inner join calender_content c 
-                on cd.id = c.calendarcontent_id where c.calender_id = %s"""
-        result = connect_sql(sql, calendar_id)
-        data = ''
-        if len(result) > 0:
-            data = [content['name'] for content in result]
-            data = ", ".join(data)
-        return data
-    except Exception as exc:    
-        return ''

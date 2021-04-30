@@ -21,10 +21,10 @@
     <div class="row">
         <div class="col-md-4">
             <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
-                Đơn vị
+                Phòng ban
             </span><br/>
             <select class="form-group" style="margin: 1px;width:200px;" id="depart_unit_id">
-                <option value="0" selected>TẤT CẢ ĐIỆN LỰC</option>
+                <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
                 {% if list_chair_unit %}
                     {% for item in list_chair_unit %}
                         <option value="{{item.id}}">{{ item.name | upper }}</option>
@@ -149,7 +149,6 @@
                                                     <i class="fa fa-coffee fa-sm" style="color:brown" aria-hidden="true"></i>
                                                 {% endif %}
                                                 {{j.content}}
-                                                {{j.contents}}
                                             </span><br/>
                                             {% for file in j.multi_file %}
                                                 <a data-toggle="tooltip" target="_blank" title="{{file.2}}" name="download" href="/files/{{ file.1 }}" value="{{file.1}}">{{file.1}}</a>&nbsp;

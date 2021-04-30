@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Department, Calender, Profile, MultipleFile, Meeting, ExpectedCalender, CalendarContent
+from .models import Department, Calender, Profile, MultipleFile, Meeting, ExpectedCalender
 from django.contrib.auth.models import User, Group, Permission
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from django.contrib.auth.forms import UserChangeForm
@@ -12,7 +12,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 from .forms import AddressRadio, UploadMultiple
 import requests
 from  django import forms
-from django.db.models import Q
+# from django.db.models import F
 
 # Register your models here.
 admin.site.site_header = 'Quản trị'
@@ -56,7 +56,7 @@ class CalenderAdmin(admin.ModelAdmin):
 
     fieldsets = [
         ['Thông tin lịch', {
-            'fields': ['start_time', 'end_time', 'address', 'chair_unit', 'join_quantity', 'content_ids', 'content', 'other_requirements', ('join_component', 'other_component'), ('prepare_unit', 'other_prepare')]
+            'fields': ['start_time', 'end_time', ('location', 'address', ), 'chair_unit', 'join_quantity', 'content', ('requirement1', 'requirement2', 'requirement3'), ('requirement4', 'requirement5'), 'other_requirements', ('join_component', 'other_component'), ('prepare_unit', 'other_prepare')]
         }],
         # ('Thành phần', {
         #     'fields': ('join_component', 'other_component', 'prepare_unit',),
@@ -68,12 +68,12 @@ class CalenderAdmin(admin.ModelAdmin):
     editable_fields = []
     readonly_fields = ['get_user', 'get_department']
     exclude = ['week', 'status']
+
     change_list_template = "calender/index.html"
 
     """
     This method is used for user to select department
     """
-
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         # user_id = request.user.pk
         # group = V.getGroupUserId(user_id)
@@ -87,44 +87,14 @@ class CalenderAdmin(admin.ModelAdmin):
         #         kwargs['queryset'] = Department.objects.filter(id=idd)
         # print('db_field.name: ', db_field.name)
         if db_field.name == 'chair_unit':
-            # kwargs['queryset'] = Department.objects.filter(active=True).order_by('group', 'sequence')
-            department_id = Profile.objects.get(user=request.user.pk)
-            kwargs['queryset'] = Department.objects.filter(id=department_id.department.id)
+            kwargs['queryset'] = Department.objects.filter(active=True).order_by('group', 'sequence')
         return super(CalenderAdmin, self).formfield_for_foreignkey(db_field, request, **kwargs)
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         # print('db_field.name: ', db_field.name)
-        # if db_field.name == 'join_component' or db_field.name == 'prepare_unit':
-        #     kwargs['queryset'] = Department.objects.filter(active=True).order_by('group', 'sequence')
-        #     department_id = Profile.objects.get(user=request.user.pk)
-        #     kwargs['queryset'] = Department.objects.filter(id=department_id.department.id)
-        if db_field.name == 'content_ids':
-            kwargs['queryset'] = CalendarContent.objects.filter(active=True)
-        # Filter units depends on register unit
-        profile = Profile.objects.get(user=request.user.pk)
-        if db_field.name == 'join_component':
-            if profile.department:
-                depart_id = profile.department.id
-                kwargs['queryset'] = Department.objects.filter(parent=depart_id)
-        if db_field.name == 'prepare_unit':
-            if profile.department:
-                depart_id = profile.department.id
-                kwargs['queryset'] = Department.objects.filter(parent=depart_id)
+        if db_field.name == 'join_component' or db_field.name == 'prepare_unit':
+            kwargs['queryset'] = Department.objects.filter(active=True).order_by('group', 'sequence')
         return super(CalenderAdmin, self).formfield_for_foreignkey(db_field, request, **kwargs)
-
-    def get_form(self, request, obj=None, **kwargs):
-        form = super(CalenderAdmin, self).get_form(request, obj, **kwargs)
-        department_id = Profile.objects.get(user=request.user.pk)
-        did = department_id.department.id
-        form.base_fields['chair_unit'].initial = did
-        form.base_fields['chair_unit'].disabled = True
-        #form.base_fields['join_component'].initial = did        
-        #form.base_fields['prepare_unit'].initial = did
-        #form.base_fields['prepare_unit'].disabled = True
-        form.base_fields['other_requirements'].widget = forms.HiddenInput()
-        # form.base_fields['prepare_unit'].widget = forms.HiddenInput()
-        # form.base_fields['join_component'].widget = forms.HiddenInput()
-        return form
 
     def get_user(self, instance):
         id_user = instance.create_uid.id if instance else 0
@@ -188,8 +158,7 @@ class CalenderAdmin(admin.ModelAdmin):
             'calender': calender,
             'expected_list': expected_list,
             'department_id': department_id,
-            'parent_id': parent_id,          # "parent department"
-            'duid': department_id
+            'parent_id': parent_id          # "parent department"
         }
         return super().changelist_view(request, extra_context=extra_context)
 
@@ -200,7 +169,7 @@ class CalenderAdmin(admin.ModelAdmin):
         return super(CalenderAdmin, self).change_view(request, object_id)
         
     def convertNumberWeek(self, date):
-        p = int(date.strftime("%V")) + 1
+        p = int(date.strftime("%V"))
         return p
 
     def save_model(self, request, obj, form, change):
@@ -218,10 +187,9 @@ class CalenderAdmin(admin.ModelAdmin):
             if len(depart_level) > 0:
                 for i in depart_level:
                     # Nếu trưởng phòng, văn thư tạo lịch thì cập nhật đã duyệt lịch mức phòng luôn
-                    if i['group_id'] == 1 or i['group_id'] == 2 or i['group_id'] == 3:
+                    if i['group_id'] == 2 or i['group_id'] == 3:
                         obj.status = 'ACCEPT'
                         obj.check_calender = 1
-                        break
 
             sql_comp = "select cd.id from calender_profile cp inner join calender_department cd on cp.department_id = cd.id where user_id = {} and ( cd.name like N'GĐPC%' or cd.name like N'%PGĐ KD%' or cd.name like N'%PGĐ KT%' or cd.name like N'%PGĐ ĐTXD%' )".format(request.user.pk)
             comp_level = V.connect_sql(sql_comp)
@@ -243,6 +211,7 @@ class CalenderAdmin(admin.ModelAdmin):
                 if start_time != default_start_time or end_time != default_end_time:
                     obj.cancel_status = 6           # Change time
                     obj.write_date = datetime.now()
+                    print("adminnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
                     insert_chat = "INSERT INTO QNaPC_ChangeToChat(id, id_pb, username, sended, send_time, cancel_status, write_date, user_edit)  VALUES (%s, NULL, NULL, 0, NULL, %s, %s, %s)"
                     V.execute_sql(insert_chat, obj.pk, obj.cancel_status, datetime.now(), request.user.pk)
 
@@ -314,6 +283,10 @@ class MyUserAdmin(UserAdmin):
     inlines = (EmployeeInline,)
     list_display = ['username', 'email', 'last_name', 'is_active', 'get_groups', 'get_department', 'last_login']
     list_select_related = ('profile', )
+
+    def get_is_manager(self, instance):
+        return instance.profile.is_manager
+    get_is_manager.short_description = 'Ban giám đốc'
     
     def get_department(self, instance):
         return instance.profile.department
@@ -332,12 +305,6 @@ class MyUserAdmin(UserAdmin):
 class MyGroupAdmin(GroupAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
-    
-    def queryset(self, request):
-        print("queryset MyGroupAdmin")
-        qs = super(MyGroupAdmin, self).queryset(request)
-        qs = qs.filter(id= not 1)
-        return qs
 
 # class MyAdminSite(AdminSite):
 #     # Disable View on Site link on admin page
@@ -345,9 +312,9 @@ class MyGroupAdmin(GroupAdmin):
     
 class DepartmentAdmin(admin.ModelAdmin):
     ordering = ['group', 'sequence']
-    list_display = ('name', 'group', 'parent', 'sequence', 'active', 'note')
-    search_fields = ('name', 'group', 'parent__name', 'sequence', 'active', 'note')
-    list_filter = ('name', 'group', 'parent', 'sequence', 'active', 'note')
+    list_display = ('name', 'group', 'sequence', 'active', 'note')
+    search_fields = ('name', 'group', 'sequence', 'active', 'note')
+    list_filter = ('name', 'group', 'sequence', 'active', 'note')
     actions = ('change_status_active', )
 
     def change_status_active(modeladmin, request, queryset):
@@ -359,16 +326,6 @@ class DepartmentAdmin(admin.ModelAdmin):
             active = Department.objects.get(id = i).active
             Department.objects.filter(id = i).update(active= not active)
     change_status_active.short_description = 'Đổi trạng thái'
-
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == 'parent':
-            param_list = request.environ['PATH_INFO'].split("/")
-            main_id = eval(param_list[4])
-            # /admin/calender/department/3/change/ =] ['', 'admin', 'calender', 'department', '4', 'change', '']
-            if len(param_list) == 7 and type(main_id) is int:
-                kwargs['queryset'] = Department.objects.filter(~Q(id=main_id))
-        return super(DepartmentAdmin, self).formfield_for_foreignkey(db_field, request, **kwargs)
-
 
 class MeetingAdmin(admin.ModelAdmin):
     ordering = ['group', 'sequence']
@@ -389,21 +346,8 @@ class ExpectedAdmin(admin.ModelAdmin):
         # obj.write_date = datetime.now()
         super(ExpectedAdmin, self).save_model(request, obj, form, change)
 
-
-class CalendarContentAdmin(admin.ModelAdmin):
-    ordering = ['name', 'active']
-    list_display = ('name', 'active')
-    search_fields = ('name', 'active')
-    list_filter = ('name', 'active')
-    exclude = ('create_uid', 'write_uid', )
-
-    def save_model(self, request, obj, form, change):
-        obj.create_uid = request.user
-        # obj.write_date = datetime.now()
-        super(CalendarContentAdmin, self).save_model(request, obj, form, change)
-
 admin.site.register(ExpectedCalender, ExpectedAdmin)
-admin.site.register(CalendarContent, CalendarContentAdmin)
+
 
 admin.site.register(Department, DepartmentAdmin)
 admin.site.register(Meeting, MeetingAdmin)

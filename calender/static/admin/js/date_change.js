@@ -119,23 +119,6 @@ django.jQuery( document ).ready(function() {
             }
         }
     })
-    // Disable another fieled when input one field
-    django.jQuery("#id_content_ids").change(function () {
-        var value = django.jQuery('#id_content_ids option:selected').text();
-        if(value.length != 0) {
-            django.jQuery('#id_content').attr('disabled','disabled');
-        }else{
-            django.jQuery('#id_content').removeAttr('disabled');
-        }
-    });
-    django.jQuery("#id_content").change(function () {
-        var value = django.jQuery('#id_content').val();
-        if(value.length != 0) {
-            django.jQuery('#id_content_ids').attr('disabled','disabled');
-        }else{
-            django.jQuery('#id_content_ids').removeAttr('disabled');
-        }
-    })
     django.jQuery("#id_start_time_0").attr("autocomplete", "off");
     django.jQuery("#id_start_time_1").attr("autocomplete", "off");
     django.jQuery("#id_end_time_0").attr("autocomplete", "off");
@@ -145,8 +128,6 @@ django.jQuery( document ).ready(function() {
     django.jQuery("#id_other_prepare").attr("rows", "2");
     django.jQuery(".vLargeTextField").attr("cols", 10);
     django.jQuery(".vLargeTextField").css("font-size", 14);
-    django.jQuery("#id_content_ids").attr("rows", "2");
-    django.jQuery(".select2-selection--multiple").attr("style", "width: 350px");
 
     // django.jQuery("#multiplefile_set-0 .delete").append('<div><a class="inline-deletelink-0" href="#">Gỡ bỏ</a></div>');
 });

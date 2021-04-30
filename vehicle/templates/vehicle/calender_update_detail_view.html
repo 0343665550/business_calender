@@ -14,6 +14,9 @@
         body {
                 background-color: #f8fafc;
         }
+        #id_approved_by {
+            width: 23%;
+        }
 </style>
 
 <div id="content-main">
@@ -163,6 +166,16 @@
                                 {{ disableform.register_unit }}
                             </div>
                         </div>
+
+                        {% if disableform.approved_by.value %}
+                            <div class="form-row field-approved_by">
+                                <div>
+                                    {{ disableform.approved_by.label_tag }}
+                                    {{ disableform.approved_by }}
+                                </div>
+                            </div>
+                        {% endif %}
+                        
                     </fieldset>
                 </div>
             </div>

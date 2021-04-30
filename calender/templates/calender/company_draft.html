@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <div class="tab-pane fade show active" id="nav-profile" role="tabpanel" aria-labelledby="nav-profile-tab">
     <div class="row">
         <div class="col-md-3">
@@ -9,7 +9,7 @@
             </form>
         </div>
         <div class="col-md-6 tieudelich">
-            <span class="badge badge-primary">LỊCH DỰ THẢO TUẦN THỨ {{ week_evn }}</span><br>
+            <span class="badge badge-primary">LỊCH DỰ THẢO CÔNG TY TUẦN THỨ {{ week_evn }}</span><br>
             <span class="badge badge-info">Từ ngày: {{ start_evn }} đến ngày: {{ end_evn }}</span>
         </div>
         <div class="col-md-3">
@@ -22,10 +22,10 @@
     <div class="row">
         <div class="col-md-4">
             <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
-                Đơn vị
+                Phòng ban
             </span><br/>
             <select class="form-group" style="width:200px;" id="chair_unit_id">
-                <option value="0" selected>TẤT CẢ ĐIỆN LỰC</option>
+                <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
                 {% if list_chair_unit %}
                     {% for item in list_chair_unit %}
                         <option value="{{item.id}}">{{ item.name | upper }}</option>
@@ -94,7 +94,7 @@
                                         <td class="SubHead15" align="center" width="15%">
                                             Chuẩn bị</td>
                                         <td class="SubHead15" align="center" width="15%">
-                                            Đơn vị đăng ký</td>
+                                            Chủ trì</td>
                                         <td class="SubHead15" align="center" width="20%">
                                             Thành phần tham gia</td>
                                         <td class="SubHead15" align="center" width="10%" style="text-align: center;">
@@ -108,11 +108,9 @@
                                             <span class="SubHead12" style="font-size:11px; font-weight:bold;" id="">{{j.starttime}} - {{j.endtime}}</span></br>
                                             {% include "calender/meetting_status.html" %}
                                             {% if j.status == 'ACCEPT' or j.status == 'DONE' %}
-                                                {% if 3 in group_list and duid == j.create_depart_id_id %}
-                                                    <a href="/admin/calender/draft/{{ j.id }}/change/" title="Chỉnh sửa lịch">
-                                                        <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
-                                                    </a>
-                                                {% endif %}
+                                                <a href="/admin/calender/draft/{{ j.id }}/change/" title="Chỉnh sửa lịch">
+                                                    <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
+                                                </a>
                                             {% endif %}
                                         </td>
                                         <td width="30%">
@@ -127,7 +125,6 @@
                                                     <i class="fa fa-coffee fa-sm" style="color:brown" aria-hidden="true"></i>
                                                 {% endif %}
                                                 {{j.content}}
-                                                {{j.contents}}
                                             </span><br/>
                                             {% for file in j.multi_file %}
                                                 <a data-toggle="tooltip" target="_blank" title="{{file.2}}" name="download" href="/files/{{ file.1 }}" value="{{file.1}}">{{file.1}}</a>&nbsp;
@@ -161,17 +158,17 @@
                                             </span>
                                         </td>
                                         <td width="10%">
-                                            {% if j.check_calender_letter and duid == j.create_depart_id_id %}
-                                                <input class="checkbox_draf" name="check_draf" type="checkbox" value="{{ j.id }}" style="display: inline-block;" checked />
+                                            <input class="checkbox_draf" name="check_draf" type="checkbox" value="{{ j.id }}" style="display: inline-block;"
+                                            {% if j.check_calender_letter %}
+                                            checked
+                                            {% endif %} />
+                                            {% if j.check_calender_letter %}
                                                 <span>Lịch đã ban hành</span>
                                                 <a data-toggle="modal" data-target="#myModalUndo" title="Huỷ duyệt lịch đã ban hành" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" class="undo-browsecalender" href="#Undo-browse">
                                                     <i class="fa fa-times" style="color:#8e0cbd;" aria-hidden="true"></i>
                                                 </a>
-                                            {% elif not j.check_calender_letter and duid == j.create_depart_id_id %}
-                                                <input class="checkbox_draf" name="check_draf" type="checkbox" value="{{ j.id }}" style="display: inline-block;" />
-                                                <span>Duyệt lịch</span>
                                             {% else %}
-                                                <span></span>
+                                                <span>Duyệt lịch</span>
                                             {% endif %}
                                         </td>
                                     </tr>
