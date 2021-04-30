@@ -141,6 +141,7 @@
                                                     <i class="fa fa-coffee fa-sm" style="color:brown" aria-hidden="true"></i>
                                                 {% endif %}
                                                 {{j.content}}
+                                                {{j.contents}}
                                             </span><br/>
                                             {% for file in j.multi_file %}
                                                 <a data-toggle="tooltip" target="_blank" title="{{file.2}}" name="download" href="/files/{{ file.1 }}" value="{{file.1}}">{{file.1}}</a>&nbsp;

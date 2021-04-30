@@ -293,7 +293,7 @@ def update_detail_view(request, cid):
             if form.is_valid() and form.has_changed():
                 #  and form.has_changed()
                 post = form.save(commit=False)
-                post.week = int(form.cleaned_data['start_time'].strftime("%V"))
+                post.week = int(form.cleaned_data['start_time'].strftime("%V")) + 1
                 post.write_uid = request.user
                 post.write_date = datetime.now()
                 post.save()
@@ -327,7 +327,7 @@ def add_view(request):
                 post = form.save(commit=False)
                 if request.user.has_perm("vehicle.confirm_vehicle"):
                     post.status = "CONFIRM"
-                post.week = int(form.cleaned_data['start_time'].strftime("%V"))
+                post.week = int(form.cleaned_data['start_time'].strftime("%V")) + 1
                 # post.register = request.user
                 post.create_uid = request.user
                 register_unit = Profile.objects.get(user=request.user).department_id

@@ -1,5 +1,5 @@
 from django import forms
-from .models import Calender, Department, MultipleFile
+from .models import Calender, Department, MultipleFile, CalendarContent, Profile
 from django.contrib.admin.widgets import AdminSplitDateTime, RelatedFieldWidgetWrapper
 from django.forms import inlineformset_factory, modelformset_factory
 from django.contrib.admin import site as admin_site
@@ -50,13 +50,22 @@ class CalenderChangeForm(forms.ModelForm):
     class Meta:
         model = Calender
         # fields = "__all__"
-        fields = ['start_time', 'end_time', 'address', 'chair_unit', 'join_quantity', 'content', 'requirement1', 'requirement2', 'requirement3', 'requirement4', 'requirement5', 'other_requirements', 'other_component', 'other_prepare']
+        fields = ['start_time', 'end_time', 'address', 'chair_unit', 'join_quantity', 'content_ids', 'content', 'requirement1', 'requirement2', 'requirement3', 'requirement4', 'requirement5', 'other_requirements', 'join_component', 'other_component', 'prepare_unit', 'other_prepare']
         # localized_fields = ('start_time',)
 
     def __init__(self, *args, **kwargs):
+        self.user_id = kwargs.pop('user_id', None)
         super(CalenderChangeForm, self).__init__(*args, **kwargs)
         self.fields['start_time'].widget = AdminSplitDateTime()
         self.fields['end_time'].widget = AdminSplitDateTime()
+        self.fields['content_ids'].queryset = CalendarContent.objects.filter(active=True)
+        if self.user_id:
+            profile = Profile.objects.get(user=self.user_id)
+            if profile.department:
+                depart_id = profile.department.id
+                self.fields['join_component'].queryset = Department.objects.filter(parent=depart_id)
+                self.fields['prepare_unit'].queryset = Department.objects.filter(parent=depart_id)
+            
         # self.fields["start_time"].widget = DateTimeInput()
         # self.fields["start_time"].input_formats = ["%Y/%m/%dT%H:%M", "%Y/%m/%d %H:%M"]
         # self.fields["end_time"].widget = DateTimeInput()
@@ -67,7 +76,7 @@ class CalenderChangeForm(forms.ModelForm):
         # name = cleaned_data.get('name')
         # print('CLEAN DATA: ', cleaned_data)
         # print('CLEAN DATA count: ', len(cleaned_data))
-        if len(cleaned_data) != 14:
+        if len(cleaned_data) <= 14:
             raise forms.ValidationError('Vui lòng nhập đầy đủ thông tin!')
         return cleaned_data
     
@@ -87,9 +96,8 @@ class AddressRadio(forms.ModelForm):
         model = Calender
         fields = ['address',]
     def save(self, *args, **kwargs):
-        print("saveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
         if self.cleaned_data['addresses']:
-            print("saveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee1")
+            pass
             # do something with your extra fields,
             # remove values from other fields, etc.
         super(AddressRadio, self).save(*args, **kwargs)

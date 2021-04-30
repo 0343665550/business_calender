@@ -2254,8 +2254,7 @@ function getWeek(year,month,day){
 
     NumberOfWeek = Math.floor(d1/7) + 1;
 
-    return NumberOfWeek;
-
+    return NumberOfWeek + 1;	// +1 for 13 office
 }
 
 
