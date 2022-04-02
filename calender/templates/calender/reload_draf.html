@@ -1,0 +1,246 @@
+{% load static %}
+<div class="tab-pane fade show active" id="nav-profile" role="tabpanel" aria-labelledby="nav-profile-tab">
+    <div class="row">
+        <div class="col-md-3">
+            <form id="myform_draf" method="post">
+                {% csrf_token %}
+                <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Tuần lịch</span><br>
+                <input type="text" onchange="send_draf()" value="{{ date_draf }}" style="height:30px; width:200px;" readonly name="theDate2_draf" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms['myform_draf'].theDate2_draf,'dd-mm-yyyy',this)">
+            </form>
+        </div>
+        <div class="col-md-6 tieudelich">
+            <span class="badge badge-primary">LỊCH DỰ THẢO CÔNG TY TUẦN THỨ {{ week_draf }}</span><br>
+            <span class="badge badge-info">Từ ngày: {{ start_draf }} đến ngày: {{ end_draf }}</span>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group" style="float:right;">
+                <button type="button" id="refresh" class="btn btn-info btn-sm"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button>
+                <a href="/admin/calender/calender/"><button type="button" class="btn btn-info btn-sm"><i class="fa fa-home" aria-hidden="true"></i> Lịch ban hành</button></a>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-4">
+            <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
+                Phòng ban
+            </span><br/>
+            <select class="form-group" style="margin: 1px;width:200px;" id="chair_unit_id">
+                <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
+                {% if list_chair_unit %}
+                    {% for item in list_chair_unit %}
+                        <option value="{{item.id}}">{{ item.name | upper }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        <div class="col-md-3"></div>
+        <div class="col-md-5 align-self-end ml-auto">
+            <div class="form-group" style="margin: 1px;float:right; ">
+                <a href="/calender/export_xlsx/?date={{start_draf}}&status=draft-company&depart_id={{department_id}}"><button type="button" class="btn btn-outline-success btn-sm"><i class="fa fa-file-excel-o" aria-hidden="true"></i> In lịch</button></a>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-12">
+            {% for i in date_list_draf %}
+            <div id="accordion">
+                <div class="card">
+                    <div class="card-header bg-primary align-items-left justify-content-center h-25" id="headingdraft{{i.date}}" style="background-color:#1f96e0 !important; padding:0.25rem 0.5rem;">
+                        <h5 class="mb-0" data-toggle="collapse" data-target=#draft{{i.date}} aria-expanded="true" aria-controls="collapseOne">
+                            <button class="btn btn-link btn-sm">
+                                <span style="font-size:12px; text-align: center; font-weight:bold; color:white;">{{i.day | upper}} ({{i.date}})</span>
+                            </button>
+                            <span style="font-size:13px; margin-top: 9px; float:right; text-align: text-align: center; font-weight:bold; background-color:red; color:white;">{{i.count}}</span>
+                        </h5>
+                    </div>
+                    <div id="draft{{i.date}}" class="collapse show" aria-labelledby="headingOne" data-parent="#accordion">
+                        <div class="card-body" style="padding:0;">
+                        {% if i.count > 0 %}
+                            <table class="style4">
+                                <tbody>
+                                    <tr class="headlcn">
+                                        <td class="SubHead15" style="text-align: center;" width="10%">
+                                            Thời gian/Địa điểm</td>
+                                        <td class="SubHead15" align="center" width="30%">
+                                            Nội dung</td>
+                                        <td class="SubHead15" align="center" width="15%">
+                                            Chuẩn bị</td>
+                                        <td class="SubHead15" align="center" width="15%">
+                                            Chủ trì</td>
+                                        <td class="SubHead15" align="center" width="20%">
+                                            Thành phần tham gia</td>
+                                        <td class="SubHead15" align="center" width="10%" style="text-align: center;">
+                                            Duyệt lịch
+                                        </td>
+                                    </tr>
+                                    {% for j in calender_draf %}
+                                        {% if i.date == j.date %}
+                                    <tr>
+                                        <td style="text-align: center;" width="10%">
+                                            <span class="SubHead12" style="font-size:11px; font-weight:bold;" id="">{{j.starttime}} - {{j.endtime}}</span></br>
+                                            {% include "calender/meetting_status.html" %}
+                                        </td>
+                                        <td width="30%">
+                                            <span>
+                                                {% if j.requirement1  %}
+                                                    <i class="fa fa-video-camera fa-sm" style="color:red" aria-hidden="true"></i>
+                                                {% endif %}
+                                                {% if j.requirement2 %}
+                                                    <i class="fa fa-desktop fa-sm" style="color:orange" aria-hidden="true"></i>
+                                                {% endif %}
+                                                {% if j.requirement4 %}
+                                                    <i class="fa fa-coffee fa-sm" style="color:brown" aria-hidden="true"></i>
+                                                {% endif %}
+                                                {{j.content}}
+                                            </span><br/>
+                                            {% for file in j.multi_file %}
+                                                <a data-toggle="tooltip" title="{{file.2}}" name="download" href="/files/{{ file.1 }}" value="{{file.1}}">{{file.1}}</a>&nbsp;
+                                            {% endfor %}
+                                        </td>
+                                        <td width="15%">
+                                            <span>
+                                                {{ j.prepare_unit|join:", " }}
+                                                {% if j.other_prepare %}
+                                                    {% if j.prepare_unit %}
+                                                        , {{ j.other_prepare }}
+                                                    {% else %}
+                                                        {{ j.other_prepare }}
+                                                    {% endif %}
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                        <td width="15%">
+                                            <span>{{j.name}}</span>
+                                        </td>
+                                        <td width="20%">
+                                            <span>
+                                                {{ j.join_component|join:", " }}
+                                                {% if j.other_component %}
+                                                    {% if j.join_component %}
+                                                        , {{ j.other_component }}
+                                                    {% else %}
+                                                        {{ j.other_component }}
+                                                    {% endif %}
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                        <td width="10%">
+                                            <input class="checkbox_draf" name="check_draf" type="checkbox" value="{{ j.id }}" disabled style="display: inline-block;"
+                                            {% if j.check_calender %}
+                                            checked
+                                            {% endif %} />
+                                            {% if j.check_calender %}
+                                                <span>Lịch đã duyệt</span>
+                                            {% else %}
+                                                <span>Duyệt lịch</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+    function send_draf(){
+        var dmy_draf = document.forms["myform_draf"]["theDate2_draf"].value;
+        //alert(dmy_draf);
+        var e = document.getElementById("chair_unit_id");
+        var value = e.options[e.selectedIndex].value;
+        $.ajax({
+            async: false,
+            url: "/calender/week_draf/",
+            type: "POST",
+            data: {
+                value: value,
+                date: dmy_draf,
+                start : dmy_draf
+            },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(data) {
+                $("#nav-profile").replaceWith(data);
+            },
+            error: function(xhr, status, error){
+                var errorMessage = xhr.status + ': ' + xhr.statusText
+                alert('Error - ' + errorMessage);
+            }
+        });
+    }
+    $(document).ready(function(){
+        $("#chair_unit_id").val({{ department_id }});
+
+        $('#refresh').click(function() { 
+            var dmy_draf = document.forms["myform_draf"]["theDate2_draf"].value;
+            //alert(dmy_draf);
+            var e = document.getElementById("chair_unit_id");
+            var value = e.options[e.selectedIndex].value;
+            $.ajax({
+                async: false,
+                url: "/calender/week_draf/",
+                type: "POST",
+                data: {
+                    value: value,
+                    date: dmy_draf,
+                    start : dmy_draf
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function(data) {
+                    $("#nav-profile").replaceWith(data);
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Error - ' + errorMessage);
+                }
+            });
+        });
+        $('#chair_unit_id').change(function(){
+            var e = document.getElementById("chair_unit_id");
+            var value = e.options[e.selectedIndex].value;
+            $.ajax({
+                url: "/calender/week_draf/",
+                type: "POST", // or "get"
+                data: 
+                {
+                    value: value,
+                    date: '{{ date_draf }}',
+                    start : '{{ start_draf }}'
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                success: function(data) {
+                    //alert(data)
+                    $("#nav-profile").replaceWith(data)
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Error - ' + errorMessage);
+                }
+            });
+        });
+        $('#checked_all_draf').on('click',function(){
+            if(this.checked){
+                $('.checkbox_draf').each(function(){
+                    this.checked = true;
+                });
+            }else{
+                $('.checkbox_draf').each(function(){
+                    this.checked = false;
+                });
+            }
+        });
+        $('.checkbox_draf').on('click',function(){
+            if($('.checkbox_draf:checked').length == $('.checkbox_draf').length){
+                $('#checked_all_draf').prop('checked',true);
+            }else{
+                $('#checked_all_draf').prop('checked',false);
+            }
+        });
+    });
+</script>

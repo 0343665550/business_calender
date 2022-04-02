@@ -1,0 +1,438 @@
+{% load static %}
+<div class="tab-pane fade show active" id="nav-profile" role="tabpanel" aria-labelledby="nav-profile-tab">
+    <div class="row">
+        <div class="col-md-3">
+            <form id="myform_evn" method="post">
+                    {% csrf_token %}
+                <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Tuần lịch</span><br>
+                <input type="text" onchange="send_evn()" value="{{ date_evn }}" style="height:30px; width:200px;" readonly name="theDate2_evn" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms['myform_evn'].theDate2_evn,'dd-mm-yyyy',this)">
+            </form>
+        </div>
+        <div class="col-md-6 tieudelich">
+            <span class="badge badge-primary">LỊCH DỰ THẢO CÔNG TY TUẦN THỨ {{ week_evn }}</span><br>
+            <span class="badge badge-info">Từ ngày: {{ start_evn }} đến ngày: {{ end_evn }}</span>
+        </div>
+        <div class="col-md-3">
+            <div class="form-group" style="float:right;">
+                <button type="button" id="refreshCalenderCompany" class="btn btn-info btn-sm"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button>
+                <a href="/admin/calender/calender/"><button type="button" class="btn btn-info btn-sm"><i class="fa fa-home" aria-hidden="true"></i> Lịch ban hành</button></a>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-4">
+            <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:11px; margin:5px 0px;">
+                Phòng ban
+            </span><br/>
+            <select class="form-group" style="width:200px;" id="chair_unit_id">
+                <option value="0" selected>TẤT CẢ PHÒNG BAN</option>
+                {% if list_chair_unit %}
+                    {% for item in list_chair_unit %}
+                        <option value="{{item.id}}">{{ item.name | upper }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        <div class="col-md-3"></div>
+        <div class="col-md-5 align-self-end ml-auto">
+            <div class="form-group" style="margin: 1px;float:right; ">
+                <input type="hidden" id="week" name="week" value="{{ week }}">
+                <span id="mutiButton">
+                {% if status_evn == "NEW" or status_evn == "ACCEPT" %}
+                    <button id="browseCalenderCompany" type="button" class="btn btn-primary btn-sm"><i class="fa fa-calendar-check-o" aria-hidden="true"></i>
+                        Duyệt lịch
+                    </button>
+                {% elif status_evn == "DONE" %}
+                    <button id="cancelcalenderCompany" type="button" class="btn btn-danger btn-sm"><i class="fa fa-calendar-times-o" aria-hidden="true"></i>
+                        Hủy duyệt lịch
+                    </button>
+                {% endif %}
+                <a href="/calender/export_xlsx/?date={{start_evn}}&status=draft-company&depart_id={{chair_unit_id}}"><button type="button" class="btn btn-outline-success btn-sm"><i class="fa fa-file-excel-o" aria-hidden="true"></i> In lịch</button></a>
+                </span >
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        {% if calender_evn %} 
+            <div class="col-md-10">
+        {% else %} 
+            <div class="col-md-12">
+        {% endif %}
+        </div>
+        {% if calender_evn %}
+        <div class="col-md-2 align-self-end ml-auto">
+            <div class="form-group" style="margin: 1px;float:right; color: white; background-color: #17a2b8;">
+                <span>CHỌN TẤT CẢ LỊCH </span>
+                <input class="checkboxcompany" id="checked_all_draft" type='checkbox' name='showhide_evn' style="display: inline-block;" />
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="row">
+        <div class="col-md-12">
+            {% for i in date_list_evn %}
+            <div id="accordion">
+                <div class="card">
+                    <div class="card-header bg-primary align-items-left justify-content-center h-25" id="headingevn{{i.date}}" style="background-color:#1f96e0 !important; padding:0.25rem 0.5rem;">
+                        <h5 class="mb-0" data-toggle="collapse" data-target=#evn{{i.date}} aria-expanded="true" aria-controls="collapseOne">
+                            <button class="btn btn-link btn-sm">
+                                <span style="font-size:12px; text-align: center; font-weight:bold; color:white;">{{i.day | upper}} ({{i.date}})</span>
+                            </button>
+                            <span style="font-size:13px; margin-top: 9px; float:right; text-align: text-align: center; font-weight:bold; background-color:red; color:white;">{{i.count}}</span>
+                        </h5>
+                    </div>
+                    <div id="evn{{i.date}}" class="collapse show" aria-labelledby="headingOne" data-parent="#accordion">
+                        <div class="card-body" style="padding:0;">
+                        {% if i.count > 0 %}
+                            <table class="style4">
+                                <tbody>
+                                    <tr class="headlcn">
+                                        <td class="SubHead15" style="text-align: center;" width="10%">
+                                            Thời gian/Địa điểm</td>
+                                        <td class="SubHead15" align="center" width="30%">
+                                            Nội dung</td>
+                                        <td class="SubHead15" align="center" width="15%">
+                                            Chuẩn bị</td>
+                                        <td class="SubHead15" align="center" width="15%">
+                                            Chủ trì</td>
+                                        <td class="SubHead15" align="center" width="20%">
+                                            Thành phần tham gia</td>
+                                        <td class="SubHead15" align="center" width="10%" style="text-align: center;">
+                                            Duyệt lịch
+                                        </td>
+                                    </tr>
+                                    {% for j in calender_evn %}
+                                        {% if i.date == j.date %}
+                                    <tr>
+                                        <td style="text-align: center;" width="10%">
+                                            <span class="SubHead12" style="font-size:11px; font-weight:bold;" id="">{{j.starttime}} - {{j.endtime}}</span></br>
+                                            {% include "calender/meetting_status.html" %}
+                                            {% if j.status == 'ACCEPT' or j.status == 'DONE' %}
+                                                <a href="/admin/calender/draft/{{ j.id }}/change/" title="Chỉnh sửa lịch">
+                                                    <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                        <td width="30%">
+                                            <span>
+                                                {% if j.requirement1  %}
+                                                    <i class="fa fa-video-camera fa-sm" style="color:red" aria-hidden="true"></i>
+                                                {% endif %}
+                                                {% if j.requirement2 %}
+                                                    <i class="fa fa-desktop fa-sm" style="color:orange" aria-hidden="true"></i>
+                                                {% endif %}
+                                                {% if j.requirement4 %}
+                                                    <i class="fa fa-coffee fa-sm" style="color:brown" aria-hidden="true"></i>
+                                                {% endif %}
+                                                {{j.content}}
+                                            </span><br/>
+                                            {% for file in j.multi_file %}
+                                                <a data-toggle="tooltip" target="_blank" title="{{file.2}}" name="download" href="/files/{{ file.1 }}" value="{{file.1}}">{{file.1}}</a>&nbsp;
+                                            {% endfor %}
+                                        </td>
+                                        <td width="15%">
+                                            <span>
+                                                {{ j.prepare_unit|join:", " }}
+                                                {% if j.other_prepare %}
+                                                    {% if j.prepare_unit %}
+                                                        , {{ j.other_prepare }}
+                                                    {% else %}
+                                                        {{ j.other_prepare }}
+                                                    {% endif %}
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                        <td width="15%">
+                                            <span>{{j.name}}</span>
+                                        </td>
+                                        <td width="20%">
+                                            <span>
+                                                {{ j.join_component|join:", " }}
+                                                {% if j.other_component %}
+                                                    {% if j.join_component %}
+                                                        , {{ j.other_component }}
+                                                    {% else %}
+                                                        {{ j.other_component }}
+                                                    {% endif %}
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                        <td width="10%">
+                                            <input class="checkbox_draf" name="check_draf" type="checkbox" value="{{ j.id }}" style="display: inline-block;"
+                                            {% if j.check_calender_letter %}
+                                            checked
+                                            {% endif %} />
+                                            {% if j.check_calender_letter %}
+                                                <span>Lịch đã ban hành</span>
+                                                <a data-toggle="modal" data-target="#myModalUndo" title="Huỷ duyệt lịch đã ban hành" data-id="{{ j.id }}" data-date="{{ j.date }}" data-start="{{j.starttime}} - {{j.endtime}}" class="undo-browsecalender" href="#Undo-browse">
+                                                    <i class="fa fa-times" style="color:#8e0cbd;" aria-hidden="true"></i>
+                                                </a>
+                                            {% else %}
+                                                <span>Duyệt lịch</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            <!-- The Modal undo browsecalender-->
+            <div class="modal face" data-backdrop="false" data-background="false" id="myModalUndo">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                    <form id="fdeletecalender" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                        <!-- Modal Header -->
+                        <div class="modal-header">
+                            <h4 class="modal-title">Huỷ duyệt lịch</h4>
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        </div>
+                        
+                        <!-- Modal body -->
+                        <div class="modal-body confirm-undo">
+                            <input type="hidden" id="idcalender_undo" name="idcalender_undo">
+                            <p>Bạn có muốn Huỷ duyệt lịch đã ban hành với ngày giờ: <strong><span id="spidcalender_undo"></span></strong> này không?</p>
+
+                            <!-- Image loader -->
+                            <div id='loader' style="display: none; float: center; text-align: center;">
+                                <img src="{% static 'calender/images/loading.gif' %}" width='64px' height='64px'>
+                            </div>
+                            <!-- Image loader -->
+
+                        </div>
+                        
+                        <!-- Modal footer -->
+                        <div class="modal-footer">
+                            <button type="button" id="confirmUndoBrowse" class="btn btn-success btn-sm"><i class="fa fa-check" aria-hidden="true"></i> Confirm</button>
+                            <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal"><i class="fa fa-times-circle" aria-hidden="true"></i> Close</button>
+                        </div>
+                    </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row col-md-12">
+        {% include "calender/expected.html" %}
+    </div>
+</div>
+<script src="{% static 'calender/js/bootstrap.min.js' %}" type="text/javascript"></script>
+<script type="text/javascript">
+    function send_evn(){
+        var dmy_evn = document.forms["myform_evn"]["theDate2_evn"].value;
+        //alert(dmy_evn);
+        var e = document.getElementById("chair_unit_id");
+        var value = e.options[e.selectedIndex].value;
+        $.ajax({
+            async: false,
+            url: "/calender/company_draft/",
+            type: "POST",
+            data: {
+                value: value,
+                date: dmy_evn,
+                status : 'draft-company'
+            },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(data) {
+                $("#nav-profile").replaceWith(data);
+            },
+            error: function(e){
+                alert(e)
+            }
+        });
+    }
+    $(document).ready(function(){
+        $("#chair_unit_id").val({{ department_id }});
+        if($('.checkbox_draf:checked').length == $('.checkbox_draf').length){
+            //alert("OK")
+            $('#checked_all_draft').prop('checked',true);
+        }else{
+            $('#checked_all_draft').prop('checked',false);
+        }
+        $('body').on('click', '.undo-browsecalender',function(){
+            //alert("Hello modal:" + $(this).attr('data-id'));
+            document.getElementById("idcalender_undo").value = $(this).attr('data-id');
+            document.getElementById("spidcalender_undo").innerHTML = $(this).attr('data-date') + " " + $(this).attr('data-start');
+            //console.log($(this).attr('data-id'));
+        });
+        $('#confirmUndoBrowse').click(function() {
+            //alert("aaaaaaaa");
+            var date = '{{ date_evn }}';
+            var chair_unit_id = '{{ department_id }}';
+            var idcalender = document.getElementById("idcalender_undo").value;
+            //alert(idcalender);
+            $.ajax({
+                async: false,
+                url: "/calender/confirmUndoBrowse/",
+                type: "POST",
+                data:
+                {
+                    json_data: JSON.stringify({ info: {'date': date, 'chair_unit_id': chair_unit_id, 'idcalender': idcalender, 'status': 'draft-company'} })
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function(data) {
+                    $('#myModalUndo').modal('hide');
+                    $('.modal-backdrop').remove();
+                    $("#nav-profile").replaceWith(data)
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Error - ' + errorMessage);
+                }
+            });
+        });
+        $('#chair_unit_id').change(function(){
+            var e = document.getElementById("chair_unit_id");
+            var value = e.options[e.selectedIndex].value;
+            $.ajax({
+                url: "/calender/company_draft/",
+                type: "POST", // or "get"
+                data: 
+                {
+                    value: value,
+                    date: '{{ date_evn }}',
+                    status : 'draft-company'
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                success: function(data) {
+                    //alert(data)
+                    $("#nav-profile").replaceWith(data)
+                },
+                error: function(e){
+                    
+                }
+            });
+        });
+        $('#refreshCalenderCompany').click(function() {
+            var dmy_evn = document.forms["myform_evn"]["theDate2_evn"].value;
+            //alert(dmy_draf);
+            var e = document.getElementById("chair_unit_id");
+            var value = e.options[e.selectedIndex].value;
+            $.ajax({
+                async: false,
+                url: "/calender/company_draft/",
+                type: "POST",
+                data: {
+                    value: value,
+                    date: dmy_evn,
+                    status : 'draft-company'
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function(data) {
+                    $("#nav-profile").replaceWith(data);
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Error - ' + errorMessage);
+                }
+            });
+        });
+        $('#browseCalenderCompany').click(function() { 
+            var listIdCalender = [];
+            $.each($("input[name='check_draf']:checked"), function(){
+                listIdCalender.push($(this).val());
+            });
+            //alert(listIdCalender);
+            var listIdCalender_notCheck = [];
+            $.each($("input[name='check_draf']:not(:checked)"), function(){
+                listIdCalender_notCheck.push($(this).val());
+            });
+            var calender = '{{ calender_evn }}';
+            // calender variable is string
+            var chair_unit_id = '{{ department_id }}'
+            if ((calender.length === 0) || (calender instanceof Array))
+            {
+                alert("KHÔNG CÓ DỮ LIỆU LỊCH TUẦN ĐỂ DUYỆT. CẢM ƠN !!!");
+
+            }
+            else
+            {
+                if (listIdCalender.length === 0)
+                {
+                    alert("BẠN PHẢI CHỌN LỊCH TUẦN ĐỂ DUYỆT. CẢM ƠN !!!");
+                }else{
+                    date = '{{ date_evn }}';
+                    start = '{{ start_evn }}';
+                    $.ajax({
+                        url: '/calender/approval_draft_com/',
+                        type: 'POST',
+                        data: 
+                        {
+                            json_data: JSON.stringify({ info: {'chair_unit_id': chair_unit_id, 'date': date,'status': 'draft-company', 'listIdCalender': listIdCalender, 'listIdCalender_notCheck': listIdCalender_notCheck} })
+                        },
+                        headers: {'X-CSRFToken': '{{ csrf_token }}'}, 
+                        success: function (result) {
+                            $("#nav-profile").replaceWith(result);
+                            alert("BẠN ĐÃ DUYỆT " + listIdCalender.length + " LỊCH THÀNH CÔNG. CẢM ƠN !!!");
+                        }
+                    });
+                }
+            }
+        });
+
+        $('#cancelcalenderCompany').click(function() { 
+            //alert("Huỷ");
+            var listIdCalender = [];
+            var chair_unit_id = '{{ department_id }}';
+            $.each($("input[name='check_draf']:not(:checked)"), function(){
+                listIdCalender.push($(this).val());
+            });
+            //alert("My calender are not check: " + listIdCalender.join(", "));
+            if (listIdCalender.length === 0)
+            {
+                alert("BẠN PHẢI BỎ CHỌN LỊCH TUẦN ĐỂ HUỶ DUYỆT LỊCH. CẢM ƠN !!!");
+            }
+            else
+            {
+                date = '{{ date_evn }}';
+                start = '{{ start_evn }}';
+                //console.log(start);
+                $.ajax({
+                    url: '/calender/cancel_approval_draft_com/',
+                    type: 'POST',
+                    data:
+                    {
+                        json_data: JSON.stringify({ info: {'chair_unit_id': chair_unit_id, 'date': date, 'status': 'draft-company', 'listIdCalender': listIdCalender} })
+                    },
+                    headers: {'X-CSRFToken': '{{ csrf_token }}'}, 
+                    success: function (result) {
+                        $("#nav-profile").replaceWith(result);
+                        alert("BẠN ĐÃ HUỶ DUYỆT " + listIdCalender.length + " LỊCH THÀNH CÔNG. CẢM ƠN !!!");
+                    },
+                    error: function(xhr, status, error){
+                        var errorMessage = xhr.status + ': ' + xhr.statusText
+                        alert('Error - ' + errorMessage);
+                    }
+                }); 
+            }
+        });
+        
+        $('#checked_all_draft').on('click',function(){
+            //alert(this);
+            if(this.checked){
+                $('.checkbox_draf').each(function(){
+                    this.checked = true;
+                });
+            }else{
+                $('.checkbox_draf').each(function(){
+                    this.checked = false;
+                });
+            }
+        });
+
+        $('.checkbox_draf').on('click',function(){
+            //alert($('.checkbox_draf:checked').length);
+            if($('.checkbox_draf:checked').length == $('.checkbox_draf').length){
+                $('#checked_all_draft').prop('checked',true);
+            }else{
+                $('#checked_all_draft').prop('checked',false);
+            }
+        });
+    });
+</script>

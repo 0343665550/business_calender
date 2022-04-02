@@ -1,0 +1,364 @@
+{% extends 'admin/change_list.html' %}
+{% block content %}
+   {% block inline_field_sets %}
+   {% load static %}
+    <link rel="stylesheet" href="{% static 'calender/css/geoserver.css' %}" type="text/css" media="screen, projection">
+    <script src="{% static 'calender/js/jquery.min-3.5.1.js' %}" type="text/javascript"></script>
+    <script src="{% static 'calender/js/dhtmlgoodies_calendar.js' %}" type="text/javascript"></script>
+    <script src="{% static 'calender/js/bootstrap.min.js' %}" type="text/javascript"></script>
+    <link rel="icon" type="image/png" href="{% static 'calender/images/favicon.ico' %}">
+    <link rel="stylesheet" href="{% static 'calender/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'calender/css/dhtmlgoodies_calendar.css' %}" />
+    <link rel="stylesheet" href="{% static 'calender/css/screen.css' %}" type="text/css" media="screen, projection">
+	{% comment %} <link rel="stylesheet" href="{% static 'calender/css/print.css' %}" type="text/css" media="print">  {% endcomment %}
+	{% if 3 in group_list %}
+        {% include "calender/document.html" %}
+    {% else %}
+    <div id="body">
+        <div class="tieudelich">
+            <span class="badge badge-primary">LỊCH LÀM VIỆC {{ department_name }} TUẦN THỨ {{ week }}</span><br>
+            <span class="badge badge-info">TỪ NGÀY: {{ start }} ĐẾN NGÀY: {{ end }}</span><br>
+        </div>
+        <div class="form-status-holder" style="float:left;width 500px;"></div>
+        <div class="clearn"></div>
+        <div class="form-status-holder" style="float:left;width 500px;"></div>
+        <div class="clearn"></div>
+        <form id="myform" method="post">
+            {% csrf_token %}
+            <span class="badge badge-primary" style="font-weight:bold; font-size:11px;">Chọn tuần ngày làm việc</span><br>
+            <input type="text" onchange="send()" value="{{ date }}" style="height:30px; width:315px;" readonly name="theDate2" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms[0].theDate2,'dd-mm-yyyy',this)">
+        </form>
+        <br/>
+        <form id="formcalender" action="" method="post">
+            <span id="label" class="badge badge-primary" style="font-weight:bold; font-size:10px;">
+                Chọn đơn vị chủ trì
+                <select class="form-group" style="width:250px;" id="chair_unit_id">
+                    <option value="0" selected>Tất cả đơn vị chủ trì</option>
+                    {% if list_chair_unit %}
+                        {% for item in list_chair_unit %}
+                            <option value="{{item.id}}">{{ item.name | upper }}</option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </span>
+            {% if status == "NEW" %}
+                <span id="status" class="alert alert-info" style="font-weight:bold;">LỊCH CHƯA DUYỆT</span>
+            {% elif status == "ACCEPT" %}
+                <span id="status" class="alert alert-warning" style="font-weight:bold;">LỊCH ĐÃ DUYỆT</span>
+            {% else %}
+                <span id="status" class="alert alert-danger" style="font-weight:bold;">LỊCH ĐÃ HOÀN THÀNH</span>
+            {% endif %}
+            <div class="form-group" style="float:right">
+            <input type="hidden" id="week" name="week" value="{{ week }}">
+                {% for i in group %}
+                    {% if i.group_id == 1 %}
+                        <a href="/admin/calender/calender/add/"><button type="button" class="btn btn-success btn-sm">Tạo lịch</button></a>
+                    {% else %}
+                        <span id="mutiButton">
+                        {% if status == "ACCEPT" or status == "DONE" %}
+                            <a href="/" target="_blank"><button id="draft_calender" type="button" class="btn btn-primary btn-sm">
+                                Lịch dự thảo
+                            </button></a>
+                            <a href="/" target="_blank"><button id="approval_calender" type="button" class="btn btn-primary btn-sm">
+                                Lịch công ty
+                            </button></a>
+                            {% if status == "DONE" %} 
+                                <button id="cancelcalender" type="button" disabled class="btn btn-warning btn-sm">
+                                    Huỷ duyệt lịch
+                                </button>
+                            {% else %}
+                                <button id="cancelcalender" type="button" class="btn btn-warning btn-sm">
+                                    Huỷ duyệt lịch
+                                </button>
+                            {% endif %}
+                        {% else %}
+                            <button id="browsecalender" type="button" class="btn btn-primary btn-sm">
+                                Duyệt lịch
+                            </button>
+                        {% endif %}
+                        </span >
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </form>
+
+        <form action="" class="contact-form" method="post" enctype="multipart/form-data">
+            <table class="style4">
+                <tbody style="border-collapse: collapse;">
+
+                    <tr class="headlcn">
+                        <td style="text-align: center;" width="8%" class="SubHead15">
+                            Thứ/Ngày</td>
+                        <td style="text-align: center;" width="10%" class="SubHead15">
+                            Thời gian</td>
+                        <td align="center" width="15%" class="SubHead15">
+                            Địa điểm</td>
+                        <td align="center" width="24%" class="SubHead15">
+                            Nội dung</td>
+                        <td align="center" width="12%" class="SubHead15">
+                            Đơn vị chủ trì</td>
+                        <td align="center" width="12%" class="SubHead15">
+                            Đơn vị chuẩn bị</td>
+                        <td align="center" width="12%" class="SubHead15">
+                            Thành phần tham gia</td>
+                        <td align="center" width="7%" class="SubHead15" style="text-align: center">
+                            Duyệt lịch<br/>
+                            <input class="checked_all" type='checkbox' name='showhide' onchange="checkAll(this)"
+                                {% if status == "ACCEPT" or status == "DONE" %}
+                                    checked
+                                {% endif %}
+                                {% if status == "DONE" %} disabled
+                                {% endif %}
+                            />
+                        </td>
+                    </tr>
+                
+                {% for i in date_list %}
+
+                <tr>
+                    <td style="text-align: center;" width="8%" 
+                        rowspan="{% if i.count == 0 %}1{% else %}
+                            {{i.count}}
+                        {% endif %}"
+                        >
+                        <span id="" class="SubHead12">
+                            {{i.day}}
+                        </span>
+                        <span id="">
+                            ({{i.date}})
+                        </span>
+                    
+                    </td>
+
+                    {% for j in calender %}
+                        
+                        {% if i.date == j.date %}
+                            {% if j.row_num > 1 %}
+                                <tr>
+                            {% endif %}
+                            <td style="text-align: center;" width="10%">
+                                <span id="">{{j.starttime}} - {{j.endtime}}</span><br/>
+                                {% if status == "NEW" %}
+                                    <a href="/admin/calender/calender/{{ j.id }}/change/" title="Chỉnh sửa lịch">
+                                        <img src="{% static 'calender/images/edit_16x16.png' %}" alt=""></img>
+                                    </a>
+                                    <a href="/admin/calender/calender/{{ j.id }}/delete/" title="Xoá lịch">
+                                        <img src="{% static 'calender/images/delete_16x16.png' %}" alt=""></img>
+                                    </a>
+                                {% endif %}
+                            </td>
+                            <td width="15%">
+                                <span>{{j.address}}</span>
+                            </td>
+                            <td width="24%">
+                                <span>{{j.content}}</span><br/>
+                                <a name="download" href="/files/{{ j.attach_file }}" value="{{j.attach_file}}">{{j.attach_file}}</a>
+                            </td>
+                            <td width="12%">
+                                <span>{{j.name}}</span>
+                            </td>
+                            <td width="12%">
+                                <span>
+                                    {{ j.prepare_unit|join:", " }}
+                                </span>
+                            </td>
+                            <td width="12%">
+                                <span>
+                                    {{ j.join_component|join:", " }}
+                                    {% if j.other_component %}
+                                        {% if j.join_component %}
+                                            , {{ j.other_component }}
+                                        {% else %}
+                                            {{ j.other_component }}
+                                        {% endif %}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td width="7%">
+                                {% if status == "NEW" %}
+                                    <input class="checkbox" name="check" type="checkbox" value="{{ j.id }}" 
+                                    {% if j.check_calender %}
+                                    checked
+                                    {% endif %} />
+                                    <label>Duyệt lịch</label>
+                                {% else %}
+                                    <input class="checkbox" name="check" type="checkbox" value="{{ j.id }}" 
+                                        {% if j.check_calender %}
+                                        checked
+                                        {% endif %} 
+                                        {% if status == "DONE" %} disabled 
+                                        {% endif %}/>
+                                    <label>Lịch đã duyệt</label>
+                                {% endif %}
+                            </td>
+                            {% if j.row_num > 1 %}
+                                </tr>
+                            {% endif %}
+                        {% endif %}
+                        
+                    {% endfor %}
+                    {% if i.count == 0 %}
+                        <td style="text-align: center;" width="10%">
+                            <span id=""></span>
+                            <input type="hidden" value="1" name="buois" />
+                        </td>
+                        <td width="15%">
+                            <span></span>
+                        </td>
+                        <td width="24%">
+                            <span></span>
+                        </td>
+                        <td width="12%">
+                            <span></span>
+                        </td>
+                        <td width="12%">
+                            <span></span>
+                        </td>
+                        <td width="12%">
+                            <span></span>
+                        </td>
+                        <td width="7%">
+                            <span></span>
+                        </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>	
+        </table>
+
+        </form>
+    </div>
+    <script type="text/javascript">
+        function send(){
+            var dmy = document.forms["myform"]["theDate2"].value;
+            //alert(dmy);
+            $.ajax({
+                async: false,
+                url: "/calender/week/",
+                type: "POST",
+                data: {
+                    date: dmy
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function(data) {
+                    //alert(data);
+                    $("#body").replaceWith(data);
+                },
+                error: function(e){
+                    alert(e)
+                }
+            });
+        }
+        $(document).ready(function(){
+            $('#browsecalender').click(function() { 
+                //alert("duyệt");
+                var listIdCalender = [];
+                $.each($("input[name='check']:checked"), function(){
+                    listIdCalender.push($(this).val());
+                });
+                //alert("My favourite sports are: " + listIdCalender.join(", "));
+                var calender = '{{ calender }}';
+                if ((calender.length === 0) || (calender === '[]'))
+                {
+                    alert("KHÔNG CÓ DỮ LIỆU LỊCH TUẦN ĐỂ DUYỆT. CẢM ƠN !!!");
+                }
+                else
+                {
+                    if (listIdCalender.length === 0)
+                    {
+                        alert("BẠN PHẢI CHỌN LỊCH TUẦN ĐỂ DUYỆT. CẢM ƠN");
+                    }else{
+                        date = '{{ date }}';
+                        start = '{{ start }}';
+                        //alert(date);
+                        $.ajax({
+                            url: '/calender/browse/',
+                            type: 'POST',
+                            data: 
+                            {
+                                json_data: JSON.stringify({ info: {'date': date,'start': start,'listIdCalender': listIdCalender} })
+                            },
+                            headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                            success: function (result) {
+                                //setTimeout(function(){// wait for 5 secs(2)
+                                //    location.reload();// then reload the page.(3)
+                                //}, 1);
+                                $("#body").replaceWith(result);
+                            }
+                        });
+                    }
+                }
+            });
+            $('#cancelcalender').click(function() { 
+                //alert("Huỷ")
+                var listIdCalender = [];
+                $.each($("input[name='check']:checked"), function(){
+                    listIdCalender.push($(this).val());
+                });
+                if (listIdCalender.length === 0)
+                    {
+                        alert("BẠN PHẢI CHỌN LỊCH TUẦN ĐỂ HUỶ DUYỆT LỊCH. CẢM ƠN");
+                    }
+                    else
+                    {
+                        date = '{{ date }}';
+                        start = '{{ start }}';
+                        console.log(start);
+                        $.ajax({
+                            url: '/calender/cancel/',
+                            type: 'POST',
+                            data:
+                            {
+                                json_data: JSON.stringify({ info: {'date': date,'start': start,'listIdCalender': listIdCalender} })
+                            },
+                            headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                            success: function (result) {
+                                //setTimeout(function(){// wait for 5 secs(2)
+                                //        location.reload(); // then reload the page.(3)
+                                //    }, 1); 
+                                $("#body").replaceWith(result);
+                            }
+                        }); 
+                    }
+            });
+        });
+        // Set check or unchecked all checkboxes
+        function checkAll(e) {
+            var checkboxes = document.getElementsByName('check');
+            if (e.checked) {
+                for (var i = 0; i < checkboxes.length; i++) { 
+                checkboxes[i].checked = true;
+                }
+            } else {
+                for (var i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = false;
+                }
+            }
+        }
+        $("#getDuyetLich").click(function(){
+            //alert("Hello");
+            var favorite = [];
+            $.each($("input[name='check']:checked"), function(){
+                favorite.push($(this).val());
+            });
+            //alert("My favourite sports are: " + favorite.join(", "));
+        });
+        {% comment %} $('.checked_all').on('change', function() {     
+                $('.checkbox').prop('checked', $(this).prop("checked"));              
+        }); {% endcomment %}
+        //deselect "checked all", if one of the listed checkbox product is unchecked amd select "checked all" if all of the listed checkbox product is checked
+        $('.checkbox').change(function(){ //".checkbox" change 
+            if($('.checkbox:checked').length == $('.checkbox').length){
+                   $('.checked_all').prop('checked',true);
+            }else{
+                   $('.checked_all').prop('checked',false);
+            }
+        });
+    </script>
+
+    {% endif %}
+
+    {% comment %} {% include "calender/index.html" %} {% endcomment %}
+    {% endblock %}
+    {% comment %} {{ block.super }} {% endcomment %}
+{% endblock %}

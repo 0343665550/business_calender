@@ -1,0 +1,273 @@
+{% load static %}
+<script src="{% static 'calender/js/jquery.min-3.5.1.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/dhtmlgoodies_calendar.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/bootstrap.min.js' %}" type="text/javascript"></script>
+<link rel="icon" type="image/png" href="{% static 'calender/images/favicon.ico' %}">
+<link rel="stylesheet" href="{% static 'calender/css/geoserver.css' %}" type="text/css" media="screen, projection">
+<link rel="stylesheet" href="{% static 'calender/css/bootstrap.min.css' %}">
+<link rel="stylesheet" href="{% static 'calender/css/dhtmlgoodies_calendar.css' %}" />
+<link rel="stylesheet" href="{% static 'calender/css/screen.css' %}" type="text/css" media="screen, projection">
+<link rel="stylesheet" href="{% static 'calender/css/print.css' %}" type="text/css" media="print"> 
+
+<div id="body">
+    <div class="tieudelich">
+        <span class="badge badge-primary">LỊCH LÀM VIỆC TUẦN THỨ {{ week }}</span><br>
+        <span class="badge badge-info">TỪ NGÀY: {{ start }} ĐẾN NGÀY: {{ end }}</span>
+    </div>
+    <div class="form-status-holder" style="float:left;width 500px;"></div>
+    <div class="clearn"></div>
+    <form id="myform" method="post">
+        {% csrf_token %}
+        <span class="badge badge-primary" style="font-weight:bold; font-size:11px;">Chọn tuần ngày làm việc</span><br>
+        <input type="text" onchange="send()" value="{{ date }}" style="height:30px; width:315px;" readonly name="theDate2" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms[0].theDate2,'dd-mm-yyyy',this)">
+    </form>
+    <br/>
+    <form id="formcalender" action="" method="">
+        <input type="hidden" id="week" name="week" value="{{ week }}">
+        {% if status == "ACCEPT" or status == "NEW" %}
+            <span id="status" class="alert alert-info" style="font-weight:bold;">LỊCH CHƯA DUYỆT</span>
+        {% else %}
+            <span id="status" class="alert alert-warning" style="font-weight:bold;">LỊCH ĐÃ HOÀN THÀNH</span>
+        {% endif %}
+        <div class="form-group" style="float:right">
+            <input type="hidden" id="week" name="week" value="{{ week }}">
+            <span id="mutiButton">
+            {% if status == "ACCEPT" %}
+                <button id="browsecalender" type="button" class="btn btn-outline-primary btn-sm">
+                    Duyệt lịch
+                </button>
+            {% else %}
+                <button id="cancelcalender" type="button" class="btn btn-warning btn-sm">
+                    Lịch đã hoàn thành
+                </button>
+            {% endif %}
+            <a href="/calender/export_xlsx/?date={{start}}"><button type="button" class="btn btn-outline-success btn-sm">In lịch</button></a>
+            </span >
+        </div>
+    </form>
+
+    <form action="" class="contact-form" method="post" enctype="multipart/form-data">
+        <table class="style4">
+            <tbody>
+
+                <tr class="headlcn">
+                    <td style="text-align: center;" width="8%" class="SubHead15">
+                        Thứ/Ngày</td>
+                    <td style="text-align: center;" width="10%" class="SubHead15">
+                        Thời gian</td>
+                    <td align="center" width="10%" class="SubHead15">
+                        Địa điểm</td>
+                    <td align="center" width="22%" class="SubHead15">
+                        Nội dung</td>
+                    <td align="center" width="12%" class="SubHead15">
+                        Đơn vị chủ trì</td>
+                    <td align="center" width="15%" class="SubHead15">
+                        Đơn vị chuẩn bị</td>
+                    <td align="center" width="15%" class="SubHead15">
+                        Thành phần tham gia</td>
+                    <td align="center" width="8%" class="SubHead15">
+                        Trạng thái</td>
+                </tr>
+            
+            {% for i in date_list %}
+
+            <tr>
+                <td style="text-align: center;" width="8%" 
+                    rowspan="{% if i.count == 0 %}1{% else %}
+                        {{i.count}}
+                    {% endif %}"
+                    >
+                    <span id="" class="SubHead12">
+                        {{i.day}} <br/>
+                        <input type = "hidden" value="<?=$tinhthungaydau?>" name="" /> 
+                    </span>
+                    <span id="">
+                        ({{i.date}})
+                        <input type="hidden" value="<?=$tinhngay?>" name="" />
+                    </span>
+                
+                </td>
+                {% for j in calender %}
+                        
+                    {% if i.date == j.date %}
+                        {% if j.row_num > 1 %}
+                            <tr>
+                        {% endif %}
+                        <td style="text-align: center;" width="10%">
+                            <span id="">{{j.starttime}} - {{j.endtime}}</span><br/>
+                            <a href="/admin/calender/calender/{{ j.id }}/change/"><img src="{% static 'calender/images/edit_16x16.png' %}" alt=""></img></a>
+                            <input type="hidden" value="{{ j.id }}" name="calenderid" />
+                        </td>
+                        <td width="10%">
+                            <span>{{j.address}}</span>
+                        </td>
+                        <td width="22%">
+                            <span>{{j.content}}</span><br/>
+                            <a name="download" href="/files/{{ j.attach_file }}" value="{{j.attach_file}}">{{j.attach_file}}</a>
+                        </td>
+                        <td width="12%">
+                            <span>{{j.name}}</span>
+                        </td>
+                        <td width="15%">
+                            <span>
+                                {{ j.prepare_unit|join:", " }}
+                            </span>
+                        </td>
+                        <td width="15%">
+                            <span>
+                                {{ j.join_component|join:", " }}
+                                {% if j.other_component %}
+                                    {% if j.join_component %}
+                                        , {{ j.other_component }}
+                                    {% else %}
+                                        {{ j.other_component }}
+                                    {% endif %}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td width="8%">
+                            {% if j.cancel_status == 0 %}
+                            <span style="color:blue; font-size:11px">Bình thường</span>
+                            {% elif j.cancel_status == 1 %}
+                                <span style="font-size:11px; font-weight:bold; color:white; background-color:red;">Huỷ/Hoãn</span>
+                            {% elif j.cancel_status == 2 %}
+                                <span style="font-size:11px; font-weight:bold; color:white; background-color:orange;">Đổi thành phần</span>
+                            {% elif j.cancel_status == 3 %}
+                                <span style="font-size:11px; font-weight:bold; color:white; background-color:green;">Đổi thời gian</span>
+                            {% else %}
+                                <span style="font-size:11px; font-weight:bold; color:white; background-color:blue;">Bổ sung</span>
+                            {% endif %}
+                        </td>
+                        {% if j.row_num > 1 %}
+                            </tr>
+                        {% endif %}
+                        
+                    {% endif %}
+                    
+                {% endfor %}
+                {% if i.count == 0 %}
+                    <td style="text-align: center;" width="10%">
+                        <span id=""></span>
+                        <input type="hidden" value="1" name="buois" />
+                    </td>
+                    <td width="10%">
+                        <span></span>
+                    </td>
+                    <td width="22%">
+                        <span></span>
+                    </td>
+                    <td width="10%">
+                        <span></span>
+                    </td>
+                    <td width="15%">
+                        <span></span>
+                    </td>
+                    <td width="15%">
+                        <span></span>
+                    </td>
+                    <td width="10%">
+                        <span></span>
+                    </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>	
+    </table>
+
+    </form>
+</div>
+<script type="text/javascript">
+    function send(){
+        var dmy = document.forms["myform"]["theDate2"].value;
+        //alert(dmy);
+        $.ajax({
+            async: false,
+            url: "/calender/letter/",
+            type: "POST",
+            data: {
+                date: dmy
+            },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(data) {
+                //alert(data);
+                $("#body").replaceWith(data);
+            },
+            error: function(e){
+                alert(e)
+            }
+        });
+    }
+    $(document).ready(function(){
+        $('#browsecalender').click(function() { 
+            //alert("duyệt")
+            var calender = '{{ calender }}';
+            //alert(calender);
+            if ((calender.length === 0) || (calender === '[]'))
+            {
+                alert("KHÔNG CÓ DỮ LIỆU LỊCH TUẦN ĐỂ DUYỆT. CẢM ƠN !!!");
+            }
+            else
+            {
+
+                var status = '{{ status }}';
+                var start = '{{ start }}';
+                alert(start);
+                $.ajax({
+                    url: '/calender/browsedocument/',
+                    type: 'POST',
+                    data: 
+                    {
+                        'start' : start
+                    },
+                    headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                    success: function (result) {
+                        setTimeout(function(){// wait for 5 secs(2)
+                            location.reload(); // then reload the page.(3)
+                        }, 1);
+                        //$("#body").replaceWith(result);
+                    }
+                });
+            }
+        });
+        $('#cancelcalender').click(function() { 
+            //alert("Huỷ")
+            start = '{{ start }}';
+            console.log(start);
+            $.ajax({
+                url: '/calender/canceldocument/',
+                type: 'POST',
+                data: 
+                {
+                    'start' : start
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                success: function (result) {
+                setTimeout(function(){// wait for 5 secs(2)
+                        location.reload(); // then reload the page.(3)
+                    }, 1); 
+                }
+            }); 
+        });
+        $('#download').click(function() { 
+            //alert("Huỷ")
+            //alert("As you can see, the link no longer took you to jquery.com");
+            var download = $('download').attr('value');
+            //alert(href);
+            console.log(download);
+            $.ajax({
+                url: '/calender/download/',
+                type: 'GET',
+                data: 
+                {
+                    'download' : download
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'}, // for csrf token
+                success: function (result) {
+                //setTimeout(function(){// wait for 5 secs(2)
+                //        location.reload(); // then reload the page.(3)
+                //    }, 1); 
+                }
+            }); 
+        });
+    });
+</script>

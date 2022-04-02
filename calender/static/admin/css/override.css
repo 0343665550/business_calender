@@ -1,0 +1,22 @@
+label {
+    /* font-family : "Fira Code"; */
+    color:black;
+    font-size: 12px;
+}
+a {
+    /* font-family: "Fira Code"; */
+    color:crimson;
+    font-size: 12px;
+}
+
+.colM .aligned .vLargeTextField, .colM .aligned .vXMLLargeTextField {
+    width: 25rem;
+}
+
+.field-box.field-location {
+    width: 380px;
+}
+
+div span .badge-primary {
+    font-size: 20px;
+}

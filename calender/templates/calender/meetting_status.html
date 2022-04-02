@@ -1,0 +1,16 @@
+<span>{{j.meeting_name | default:j.address}}</span><br/>
+{% if j.cancel_status == 0 %}
+    <span style="color:blue; font-size:11px"></span>
+{% elif j.cancel_status == 1 %}
+    <span style="font-size:11px; font-weight:bold; color:white; background-color:red;">Huỷ/Hoãn</span><br/>
+{% elif j.cancel_status == 2 %}
+    <span style="font-size:11px; font-weight:bold; color:white; background-color:orange;">Thay đổi</span><br/>
+{% elif j.cancel_status == 3 %}
+    <span style="font-size:11px; font-weight:bold; color:white; background-color:green;">Bổ sung</span><br/>
+{% elif j.cancel_status == 4 %}
+    <span style="font-size:11px; font-weight:bold; color:white; background-color:red;">Đột xuất</span><br/>
+{% elif j.cancel_status == 5 %}
+    <span style="font-size:11px; font-weight:bold; color:white; background-color:orange;">Đổi địa điểm</span><br/>
+{% else %}
+    <span style="font-size:11px; font-weight:bold; color:white; background-color:orange;">Đổi thời gian</span><br/>
+{% endif %}

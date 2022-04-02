@@ -1,0 +1,154 @@
+<div class="modal face" id="modalDivision" data-backdrop="false" data-background="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form class="frm_working_division" method="post">
+                {% csrf_token %}
+                <!-- Modal Header -->
+                <div class="modal-header">
+                    <h4 class="modal-title font-weight-bold" >Phân công xe</h4>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+            
+                <!-- Modal body -->
+                <div class="modal-body">
+                    <div class="text-center">
+                        <span style="color:red; font-size:15px; font-weight:bold;">{{ j.content }}</span>
+                    </div>
+                    <div class="container_checkbox">
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label for="start_time">Thời gian đi</label>
+                                <span class="badge badge-danger">{{j.starttime}}</span>
+                                {% comment %} <input type="text" class="form-control" value="{{ j.starttime}}" id="start_time_{{j.id}}" placeholder="Thời gian đi" disabled> {% endcomment %}
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="end_time">Thời gian đến</label>
+                                <span class="badge badge-danger">{{j.endtime}}</span>
+                                {% comment %} <input type="text" class="form-control" value="{{ j.endtime}}" id="end_time_{{j.id}}" placeholder="Thời gian đến" disabled> {% endcomment %}
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="formGroupExampleInput">Chọn xe</label>
+                            <select id="division" data-placeholder="Tên xe..." class="select" multiple tabindex="3">
+                                {% for item in j.vehicle_list %}
+                                    <option value="{{item.id}}" 
+                                        {% for veh in j.vehicles %}
+                                            {% if item.id == veh.vehicle_id %}
+                                                selected
+                                            {% endif %}
+                                        {% endfor %}
+                                    >
+                                        {{ item.manage_unit }}-{{ item.name }} ({{ item.number }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="formGroupExampleInput" style="width:45px;">Lái xe</label>
+                            <select id="driver" data-placeholder="Tên lái xe..." class="select" multiple tabindex="3">
+                                {% for user in j.driver_list %}
+                                    <option value="{{user.id}}"
+                                        {% for drv in j.drivers %}
+                                            {% if user.id == drv.user_id %}
+                                                selected
+                                            {% endif %}
+                                        {% endfor %}
+                                    >
+                                        {{ user.dep_name }} - {{ user.last_name|default:user.username}}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="division_note">Ghi chú</label>
+                            <textarea class="form-control" id="division_note_{{j.id}}" value="{{ j.note}}" rows="1" style="height:100px;">{{ j.note}}</textarea>
+                        </div>
+                    </div>
+                </div>
+            
+                <!-- Modal footer -->
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary btn-sm btn_division" data={{ j.id }} ><i class="fa fa-floppy-o" aria-hidden="true"></i> Xác nhận</button>
+                    <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal"><i class="fa fa-times-circle" aria-hidden="true"></i> Hủy</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+        $('#division').chosen();
+        
+        // Xóa select nhập do jet lib
+        $('select[id="division"]').removeClass('select2-hidden-accessible');
+        $('div[id="division_chosen"]').next('span').remove();
+        $('#division_chosen').css('width', '407px');
+
+        $('#driver').chosen();
+        
+        // Xóa select nhập do jet lib
+        $('select[id="driver"]').removeClass('select2-hidden-accessible');
+        $('div[id="driver_chosen"]').next('span').remove();
+        $('#driver_chosen').css('width', '407px');
+
+
+        // Action division vehicle "PHÂN CÔNG"
+        $(".btn_division").on('click', function () {
+            // var vehicleActiveList = $(this).attr("data-vehicle");
+            // $('#division').val(vehicleActiveList);
+
+            var calenderId = $(this).attr("data");
+            // var startTime = $("#start_time_"+calenderId).val();
+            // var endTime = $("#end_time_"+calenderId).val();
+            var note = $("#division_note_"+calenderId).val();
+            var vehicleList = $("#division").val();
+            var driverList = $("#driver").val();
+
+            // if(calenderId && vehicleList.length > 0 && driverList.length > 0) {
+            $.ajax({
+                url: "/vehicle/vehicle/",
+                type: "POST",
+                data: {
+                    json_data: JSON.stringify({ 
+                        'calender_id': calenderId,
+                        // 'start_time':  startTime,
+                        // 'end_time': endTime,
+                        'note': note,
+                        'vehicle_list': vehicleList,
+                        'driver_list': driverList
+                    })
+                },
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function(resp) {
+                    if (resp == "true") {
+                        Swal.fire(
+                            'Chúc mừng!',
+                            'Bạn đã phân công xe thành công!',
+                            'success'
+                        )
+                        location.reload();
+                    } else {
+                        Swal.fire(
+                            'Sorry!',
+                            'Bạn đã phân công xe không thành công!',
+                            'warning'
+                        )
+                    }
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Sorry - ' + errorMessage);
+                }
+            });
+            // } else {
+            //     Swal.fire(
+            //         'Rất tiếc!',
+            //         'Bạn vui lòng nhập đầy đủ thông tin nhé!',
+            //         'warning'
+            //     )
+            // }
+            
+        });
+    });
+</script>

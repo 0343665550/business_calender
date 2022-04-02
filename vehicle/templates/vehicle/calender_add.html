@@ -1,0 +1,186 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'calender/css/bootstrap.min.css' %}">
+<link rel="stylesheet" href="{% static 'admin/sweetalert2/dist/sweetalert2.min.css' %}">
+<style>
+        #pills-tab li {
+                list-style-type: none;
+        }
+        .form-row {
+                display: block;
+        }
+        body {
+                background-color: #f8fafc;
+        }
+</style>
+
+<div id="content-main">
+<form method="post" novalidate="">
+        {% csrf_token %}
+        <div>
+            <div class="submit-row">
+                <input 
+                        type="submit" 
+                        value="Lưu lại" 
+                        class="default"
+                        />
+                <p class="deletelink-box"><button onclick="window.history.go(-1); return false;" class="button cancel-link">Trở về</button></p>
+
+            </div>
+            {% for hidden_field in form.hidden_fields %}
+            {{ hidden_field }}
+            {% endfor %}
+
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger" role="alert">
+            {% for error in form.non_field_errors %}
+                    {{ error }}
+            {% endfor %}
+            </div>
+            {% endif %}
+            {% comment %} {{ form.non_field_errors }} {% endcomment %}
+
+            {% comment %} {{ form.source.errors }} {% endcomment %}
+            {% comment %} {{ form.source }} {% endcomment %}
+            
+            <ul class="nav nav-pills mb-2" id="pills-tab" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="pills-home-tab" data-toggle="pill" href="#pills-home" role="tab" aria-controls="pills-home" aria-selected="true">THÔNG TIN LỊCH</a>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="pills-tabContent">
+                <div class="tab-pane fade show active" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab">
+                    <fieldset class="module aligned  module_0 initialized selected">
+                    
+                        <div class="form-row field-vehicle_type">
+                            <div>
+                                Loại xe:
+                                {{ form.vehicle_type.errors }}
+                                {{ form.vehicle_type }}
+                            </div>
+                        </div>
+
+                        <div class="form-row field-start_time">
+                            <div>
+                                {{ form.start_time.label_tag }}
+                                {{ form.start_time.errors }}
+                                {{ form.start_time }}
+                            </div>
+                        </div>
+                
+                        <div class="form-row field-end_time">
+                            <div>
+                                {{ form.end_time.label_tag }}
+                                {{ form.end_time.errors }}
+                                {{ form.end_time }}
+                                <p class="help">{{ form.end_time.help_text }}</p>
+                            </div>
+                        </div>
+                
+                        <div class="form-row field-departure">
+                            <div >
+                                {{ form.departure.label_tag }}
+                                {{ form.departure.errors }}
+                                {{ form.departure }}
+                            </div>
+                        </div>
+                
+                        <div class="form-row field-destination">
+                            <div>
+                                {{ form.destination.label_tag }}
+                                {{ form.destination.errors }}
+                                {{ form.destination }}
+                            </div>
+                        </div>
+                
+                        <div class="form-row field-expected_km">
+                            {{ form.expected_km.errors }}
+                            <div>
+                                {{ form.expected_km.label_tag }}
+                                {{ form.expected_km }}
+                            </div>
+                        </div>
+
+                        <div class="form-row field-expected_crane_hour">
+                            {{ form.expected_crane_hour.errors }}
+                            <div>
+                                {{ form.expected_crane_hour.label_tag }}
+                                {{ form.expected_crane_hour }}
+                            </div>
+                        </div>
+
+                        <div class="form-row field-seat_number">
+                            {{ form.seat_number.errors }}
+                            <div>
+                                {{ form.seat_number.label_tag }}
+                                {{ form.seat_number }}
+                            </div>
+                        </div>
+
+                        <div class="form-row field-content">
+                            <div>
+                                {{ form.content.label_tag }}
+                                {{ form.content.errors }}
+                                {{ form.content }}
+                                <p class="help">{{ form.content.help_text }}</p>
+                            </div>
+                        </div>
+
+                        <div class="form-row field-note">
+                            <div>
+                                {{ form.note.label_tag }}
+                                {{ form.note.errors }}
+                                {{ form.note }}
+                                <p class="help">{{ form.note.help_text }}</p>
+                            </div>
+                        </div>
+
+                        <div class="form-row field-is_appr_manager">
+                            <div>
+                                {{ form.is_appr_manager }}
+                                {{ form.is_appr_manager.label_tag|cut:":" }}
+                                {% comment %} <p class="help">{{ form.is_appr_manager.help_text }}</p> {% endcomment %}
+                            </div>
+                        </div>
+                        <div class="form-row field-managers" style="display:none; width">
+                            <div>
+                                {{ form.approved_by_.label_tag }}
+                                {{ form.approved_by_ }}
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+            </div>
+        </div>
+
+        <div class="submit-row">
+
+                <input 
+                        type="submit" 
+                        value="Lưu lại" 
+                        class="default" 
+                        name="_save"
+                />
+
+
+                <p class="deletelink-box"><button onclick="window.history.go(-1); return false;" class="button cancel-link">Trở về</button></p>
+
+        </div>
+
+        <script type="text/javascript" id="django-admin-form-add-constants" src="/static/admin/js/change_form.js"></script>
+        <script type="text/javascript" id="django-admin-prepopulated-fields-constants" src="/static/admin/js/prepopulate_init.js" data-prepopulated-fields="[]"></script>
+
+    </form>
+</div>
+<script src="{% static 'calender/js/jquery.min-3.5.1.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/bootstrap.min.js' %}" type="text/javascript"></script>
+{% comment %} Main lib jquery.init.js for "django is not defined" {% endcomment %}
+<script type="text/javascript" src="/static/admin/js/jquery.init.js"></script>
+<script type="text/javascript" src="{% static 'calender/js/date_change.js' %}"></script>
+<script type="text/javascript" src="{% static 'admin/switch-alert/sweetalert2.min.js' %}"></script>
+<script type="text/javascript" src="{% static 'vehicle/js/change_event.js' %}"></script>
+
+{% endblock %}

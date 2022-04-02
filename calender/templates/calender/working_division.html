@@ -1,0 +1,63 @@
+<!-- If user is "LÃNH ĐẠO" and user department is in join components or parent dep -->
+
+{% if 2 in group_list and department_id in j.join_component_ids or 2 in group_list and parent_id in j.join_component_ids %}
+    <a data-toggle="modal" data-target="#myModalDivision{{ j.id }}" data-division-id="{{ j.id }}" title="Phân công dự họp" class="working_division" style="background-color:#3d98ef;color:white;" href="#AssignMeeting"><i class="fa fa-bell-o" aria-hidden="true"></i> Phân công</a>
+    <!-- The Modal Phân công Dự họp-->
+    <div class="modal face" id="myModalDivision{{ j.id }}" data-backdrop="false" data-background="false">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form class="frm_working_division" method="post">
+                    {% csrf_token %}
+                    <!-- Modal Header -->
+                    <div class="modal-header">
+                        <h4 class="modal-title font-weight-bold" >Phân công</h4>
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    </div>
+                
+                    <!-- Modal body -->
+                    <div class="modal-body">
+                        <div>
+                            <span style="color:black; font-size:14px; font-weight:bold">{{ j.content }}</span>
+                        </div>
+                        <div style="color:red; padding:10px; text-align:start;">
+                            <div>Người dùng được phân công sẽ nhận được tin nhắn:</div>
+                            <div>1. Phân công nhiệm vụ</div>
+                            <div>2. Nhắc lịch trước 30 phút</div>
+                        </div>
+                        <div style="padding:5px; text-align:start;">
+                            <span class="text-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Chuyên viên</span>
+                        </div>
+                        <div class="container_checkbox">
+                            <ul class="list-item">
+                            {% for item in list_users %}
+                                <li>
+                                    <div class="form-group form-check">
+                                        <!-- If list user of department has face in list user of division then CHECKED -->
+                                        
+                                        <input type="checkbox" id_="checked_{{j.id}}_{{item.id}}" class="form-check-input" name="is_check{{ j.id }}" value="{{item.id}}"
+                                        {% for user in j.division_list %}
+                                            {% if item.id == user.user_id %}
+                                                checked=checked
+                                            {% endif %}
+                                        {% endfor %}
+                                        />
+                                        <div style="padding-top:4px;" >
+                                            <span id_="checked_{{j.id}}_{{item.id}}" class="check_label">{{ item.last_name|default:item.username }}</span>
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endfor %}   
+                            </ul>
+                        </div>
+                    </div>
+                
+                    <!-- Modal footer -->
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary btn-sm btn_division" data={{ j.id }}><i class="fa fa-floppy-o" aria-hidden="true"></i> Xác nhận</button>
+                        <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal"><i class="fa fa-times-circle" aria-hidden="true"></i> Hủy</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endif %}
