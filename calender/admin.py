@@ -56,7 +56,7 @@ class CalenderAdmin(admin.ModelAdmin):
 
     fieldsets = [
         ['Thông tin lịch', {
-            'fields': ['start_time', 'end_time', ('location', 'address', ), 'chair_unit', 'join_quantity', 'content', ('requirement1', 'requirement2', 'requirement3'), ('requirement4', 'requirement5'), 'other_requirements', ('join_component', 'other_component'), ('prepare_unit', 'other_prepare')]
+            'fields': ['start_time', 'end_time', ('location', 'address', ), 'chair_unit', 'join_quantity', 'content', ('requirement1', 'requirement2', 'requirement3'), ('requirement4', 'requirement5'), 'other_requirements', ('join_component', 'other_component'), ('prepare_unit', 'other_prepare'), 'management_fee']
         }],
         # ('Thành phần', {
         #     'fields': ('join_component', 'other_component', 'prepare_unit',),

@@ -5,7 +5,7 @@
             <form id="formdate_right" method="post">
                 {% csrf_token %}
                 <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Tuần lịch</span><br>
-                <input type="text" onchange="send()" value="{{ date_right }}" style="height:30px; width:200px;" readonly name="theDate2" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms[1].theDate2,'dd-mm-yyyy',this)">
+                <input type="text" onchange="send()" value="{{ date_right }}" style="height:30px; width:200px;" readonly name="theDate2" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms['formdate_right']['theDate2'],'dd-mm-yyyy',this)">
             </form>
         </div>
         <div class="col-md-4 tieudelich" style="display: inline-flex;">
@@ -154,6 +154,8 @@
                                                         {% else %}
                                                             <span class="badge badge-danger">Hủy/Hoãn</span>
                                                         {% endif %}
+
+                                                        {% include "vehicle/working_division.html" %}
                                                     </td>
                                                     <td width="10%">
                                                         <span>{{ j.departure}} => {{ j.destination }}</span>
@@ -181,6 +183,12 @@
                                                             <a href="/vehicle/vehiclecalender/{{ j.id }}" title="Chi tiết lịch xe">
                                                                 <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
                                                             </a>
+                                                            {% if j.view_btn_work_perform %}
+                                                                <a data-toggle="modal" data-target="#modalVehicleStage" data-id="{{ j.id }}" title="Thực hiện công tác" class="vehicle_stage" href="#AssignMeeting">
+                                                                    <i class="fa fa-file-image-o fa-lg" aria-hidden="true" style="font-size: large;"></i> 
+                                                                </a>
+                                                            {% endif %}
+                                                            
                                                             {% if j.status == "NEW" and has_perm_confirm %}
                                                                 <button class="badge badge-primary btn_confirm" data-id={{j.id}} data-status={{j.status}}><span style="font-size:8px;">Xác nhận</span></button>
                                                             {% elif j.status == "CONFIRM"  and has_perm_approval %}

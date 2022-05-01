@@ -955,13 +955,15 @@ class Login(View):
             username = request.POST.get('username')
             password = request.POST.get('password')
             # Authenticate with LDAP
-            ldap = ldap_test.authenticate(address, domain, username, password)
-            print('result: ', ldap)
-            user_auth = authenticate(username=username, password=user_password)
+            # ldap = ldap_test.authenticate(address, domain, username, password)
+            # print('result: ', ldap)
+            # user_auth = authenticate(username=username, password=user_password)
+            user_auth = authenticate(username=username, password=password)
             print(user_auth)
             user = User.objects.filter(username=username)
             print(username)
-            if user_auth and ldap:   
+            # if user_auth and ldap:   
+            if user_auth:   
             # Redirecting to the required login according to user status.
                 if user_auth.is_active:
                     if user_auth.is_superuser or user_auth.is_staff:

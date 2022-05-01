@@ -135,7 +135,8 @@
                                                         {% else %}
                                                             <span class="badge badge-danger">Hủy/Hoãn</span>
                                                         {% endif %}
-                                                        {% comment %} {% include "calender/meetting_status.html" %} {% endcomment %}
+                                                        
+                                                        {% include "vehicle/working_division.html" %}
                                                     </td>
                                                     <td width="12%">
                                                         <span>{{ j.departure}} => {{ j.destination }}</span>
@@ -164,6 +165,13 @@
                                                             <a href="/vehicle/vehiclecalender/{{ j.id }}" title="Chi tiết lịch xe">
                                                                 <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
                                                             </a>
+                                                            {% comment %} If login user is driver or assigned   {% endcomment %}
+                                                            {% if j.view_btn_work_perform %}
+                                                                <a data-toggle="modal" data-target="#modalVehicleStage" data-id="{{ j.id }}" title="Thực hiện công tác" class="vehicle_stage" href="#AssignMeeting">
+                                                                    <i class="fa fa-file-image-o fa-lg" aria-hidden="true" style="font-size: large;"></i> 
+                                                                </a>
+                                                            {% endif %}
+
                                                             {% if j.status == "NEW" and has_perm_confirm %}
                                                                 <button class="badge badge-primary btn_confirm" data-id={{j.id}} data-status={{j.status}}><span style="font-size:8px;">Xác nhận</span></button>
                                                             {% elif j.status == "CONFIRM" and has_perm_approval %}

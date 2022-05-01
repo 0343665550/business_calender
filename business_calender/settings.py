@@ -93,7 +93,7 @@ SECRET_KEY = '$b9t9bi-@rm&rn&n3x0@xg_a3v_(aquly-v@oqh%6!dm$^u7ak'
 DEBUG = True
 
 # ALLOWED_HOSTS = ['10.122.184.1']
-ALLOWED_HOSTS = ['127.0.0.1']
+ALLOWED_HOSTS = ['127.0.0.1', '354e-2402-800-6236-1c6f-f7b1-58cb-79d1-1bf9.ngrok.io']
 
 LANGUAGES = (
     ('vi', _('Vietnamese')),

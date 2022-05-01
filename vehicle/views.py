@@ -1,15 +1,21 @@
+from shutil import ExecError
 from django.shortcuts import render, get_object_or_404, redirect
 from datetime import datetime, timedelta
 from django.views import View
 from django.http import HttpResponse
 from django.views.generic import DetailView
 from calender.views import connect_sql, start_end_of_week, addOneDate, convertDate, week, \
-    convertNumberWeek, getGroupUserId, no_accent, execute_sql
+    convertNumberWeek, getGroupUserId, no_accent, execute_sql, getDepartmentUserId, getlistusers, \
+    reload_confirm_division, group_by_depart
 from calender.models import *
-from .models import VehicleCalender as ModelVehicleCalender, Vehicle, Vehicle_Division, Driver_Division
-from .forms import CalenderUpdateDetailForm, CalenderDisableForm, CalenderAddForm
+from .models import VehicleCalender as ModelVehicleCalender, Vehicle, Vehicle_Division, Driver_Division, VehicleWorkingStage, AssignedUser
+from .forms import CalenderUpdateDetailForm, CalenderDisableForm, CalenderAddForm, VehicleWorkingStageForm
 import json, logging, xlsxwriter
 from django.contrib.auth.models import User, Group
+from vehicle.models import *
+from django.core.files.storage import FileSystemStorage
+from django.conf import settings
+
 # Create your views here.
 
 # Saving error logs in file "vehicle_log"
@@ -62,7 +68,7 @@ def acronym_depart(lst):
 def error_action(request):
     return render(request, "vehicle/500_ISE.html")
 
-def sql_calender_detail(date, departmt, is_left_tab, status="ALL"):
+def sql_calender_detail(date, departmt, is_left_tab, status="ALL", has_perm_driver=False, user_id=None):
     try:
         date_obj = start_end_of_week(date)
         start = convertDate(date_obj['start'])
@@ -106,6 +112,27 @@ def sql_calender_detail(date, departmt, is_left_tab, status="ALL"):
 
             item["vehicles"] = acronym_depart(rs_vehicle)
             item["drivers"] = acronym_depart(list(map(cut_name, rs_driver)))        # Cut ...(...) name is behind
+
+            # If vehicle calender exist week calender
+            if item["calender_id"]:
+                assign_model = 'calender_working_division'
+            else:
+                assign_model = 'vehicle_assigneduser'
+
+            sql_division = """select cwd.user_id, u.first_name, u.last_name, u.username, cd.name from %s as cwd inner join (select user_id, first_name, last_name, username, department_id from auth_user au inner join calender_profile cp on au.id = cp.user_id) u on u.user_id = cwd.user_id
+                left join calender_department cd on cd.id = u.department_id where cwd.active = 1 and cwd.calender_id = %s"""
+            rs_division = connect_sql(sql_division % (assign_model, item['id']))
+            item['division_list'] = acronym_depart(rs_division)
+            item['filter_group'] = group_by_depart(rs_division)
+
+            view_btn_work_perform = False
+            
+            has_perm_work_perform = check_perm_work_perform(user_id, item["id"])
+
+            if has_perm_driver or has_perm_work_perform:
+                view_btn_work_perform = True
+            
+            item['view_btn_work_perform'] = view_btn_work_perform
         # print("===========================data_list=================================")
         # print(data_list)
         return data_list
@@ -180,14 +207,19 @@ class VehicleCalender(View):
             groups = getGroupUserId(user_id)
             user_group_list = [i['group_id'] for i in groups]
 
+            getDepart = getDepartmentUserId(user_id)
+            list_users = getlistusers(getDepart[0]['department_id'])
+
+            has_perm_driver = request.user.has_perm("vehicle.driver_vehicle")
+
             week = convertNumberWeek(date_left)
             week_right = convertNumberWeek(date_right)
             status_list = ModelVehicleCalender.STATUS
             register_unit_list = Department.objects.filter(active=True, is_vehicle_calender=True).order_by('group', 'sequence')
-            calender_list = sql_calender_detail(date_left, depa_left, True, stat_left)
+            calender_list = sql_calender_detail(date_left, depa_left, True, stat_left, has_perm_driver, user_id)
             date_list = date_of_week(date_left, depa_left, True, stat_left)
             # =================TAB TO THE RIGHT=================
-            calender_list_right = sql_calender_detail(date_right, depa_right, False, stat_right)
+            calender_list_right = sql_calender_detail(date_right, depa_right, False, stat_right, has_perm_driver, user_id)
             date_list_right = date_of_week(date_right, depa_right, False, stat_right)
             # ============================PERMISIONS=============================
             has_perm_add = request.user.has_perm("vehicle.register_vehicle")
@@ -219,7 +251,8 @@ class VehicleCalender(View):
                 'has_perm_add': has_perm_add,
                 'has_perm_confirm': has_perm_confirm,
                 'has_perm_approval': has_perm_approval,
-                'has_perm_assign': has_perm_assign
+                'has_perm_assign': has_perm_assign,
+                'list_users': list_users
             }
             # print(date_left, depa_left, stat_left)
             # print(date_right, depa_right, stat_right)
@@ -330,15 +363,14 @@ def update_detail_view(request, cid):
                 form = CalenderUpdateDetailForm(instance=calender)
                 for fieldname in form.fields:
                     form.fields[fieldname].disabled = True
+
         disableform = CalenderDisableForm(initial={
             'register': register, 
             'register_unit': register_unit,
             'approved_by': approved_by
             # 'approved_by': Profile.objects.filter(user=calender.approved_by.id).values_list('user__last_name', flat=True)[0]
         })
-        print({'register': register, 
-            'register_unit': register_unit,
-            'approved_by': approved_by})
+
         context = {
             'form': form,
             'disableform': disableform,
@@ -665,3 +697,567 @@ def excel_data(date, department_id, tab_active, status):
     except Exception as exc:
         LoggingFile(exc)
         return redirect('/vehicle/unexpected_error/')
+
+def view_form(request):
+    try:
+        current_date = datetime.now().strftime('%d-%m-%Y')
+        vehicle_list = Vehicle.objects.all()
+
+        context = {
+            'show_button_export': False,
+            'date_from': current_date,
+            'date_to': current_date,
+            'vehicle_id': 0,
+            'vehicle_list': vehicle_list,
+            'data_list': [],
+            'url_name': '',
+            'form_id': '0'
+        }
+        return render(request, "vehicle/form_view.html", context)
+    except Exception as exc:
+        print(exc)
+        LoggingFile(exc)
+        return redirect('/vehicle/unexpected_error/')
+
+def get_form_id(id):
+    form_dict = {
+        '1': 'export_xlsx_routine',
+        '2': 'export_xlsx_form_1',
+        '3': '',
+        '4': '',
+        '5': '',
+        '6': ''
+    }
+    url_name = form_dict[id]
+    return url_name
+
+def get_form(request):
+    try:
+        date_from = request.GET['date_from']
+        date_to = request.GET['date_to']
+        form_id = request.GET['form_id']
+        vehicle_id = request.GET['vehicle_id']
+
+        if date_from and date_to:
+            _date_from = convertDate(date_from) + ' 00:00:00'
+            _date_to = convertDate(date_to) + ' 23:59:59'
+        
+            data_list = get_stage_info(_date_from, _date_to, vehicle_id)
+
+            # Show button export excel
+            show_button_export = False
+            if len(data_list) > 0:
+                show_button_export = True
+
+            # Get url name to active event click
+            url_name = get_form_id(form_id)
+
+            vehicle_list = Vehicle.objects.all()
+
+            context = {
+                'show_button_export': show_button_export,
+                'date_from': date_from,
+                'date_to': date_to,
+                'vehicle_id': int(vehicle_id),
+                'vehicle_list': vehicle_list,
+                'data_list': data_list,
+                'url_name': url_name,
+                'form_id': form_id
+            }
+            return render(request, "vehicle/form_view.html", context)
+    except Exception as exc:
+        print(exc)
+        LoggingFile(exc)
+        return redirect('/vehicle/unexpected_error/')
+
+def get_stage_info(date_from, date_to, vehicle_id):
+    try:
+        sql = """
+                SELECT vc.content, v.id, v.number, FORMAT(vws.start_km, 'N', 'vi-VN') AS start_km, FORMAT(vws.end_km, 'N', 'vi-VN') AS end_km, CONVERT(VARCHAR(10), vws.create_date, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour
+            FROM vehicle_vehicle_division AS vd INNER JOIN vehicle_vehiclecalender AS vc ON vd.calender_id = vc.id
+            INNER JOIN vehicle_vehicle as v ON v.id = vd.vehicle_id
+            INNER JOIN vehicle_vehicleworkingstage AS vws ON vc.id = vws.calender_id 
+            WHERE vws.create_date  BETWEEN '%s' AND '%s'""" % (date_from, date_to)
+
+        if vehicle_id != '0':
+            sql += ' AND v.id = %s' % (vehicle_id,)
+        
+        data = connect_sql(sql)
+        
+        return data
+
+    except Exception as exc:
+        print(exc)
+        LoggingFile(exc)
+        return []
+
+def export_xlsx_routine(request):
+    if request.method == "GET" and request.user.pk:
+
+        date_from = request.GET['date_from']
+        date_to = request.GET['date_to']
+        vehicle_id = request.GET['vehicle_id']
+
+        data_list = []
+        if date_from and date_to:
+            _date_from = convertDate(date_from) + ' 00:00:00'
+            _date_to = convertDate(date_to) + ' 23:59:59'
+            data_list = get_stage_info(_date_from, _date_to, vehicle_id)
+        
+        # If vehicle option is 'ALL' then adding 1 column 'VEHICLE'
+        vehicle_name = ''
+        column_start = 0
+        if vehicle_id == '0':
+            vehicle_name = 'TẤT CẢ XE'
+            column_start = 1
+        else:
+            vehicle = Vehicle.objects.get(id=int(vehicle_id))
+            if vehicle:
+                vehicle_name = '%s (%s)' % (vehicle.name, vehicle.number)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = "attachment; filename=BieuMauNhatTrinh.xlsx"
+        # Create a workbook and add a worksheet.
+        workbook = xlsxwriter.Workbook(response, {'in_memory': True})
+    
+        worksheet = workbook.add_worksheet()
+        format1 = workbook.add_format({'font_size': 14, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format1.set_align('center')
+        format1.set_align('vcenter')
+        format1.set_font('Times New Roman')
+
+        worksheet.print_area('A1:H20')
+        worksheet.fit_to_pages(1, 0)
+        worksheet.set_landscape()
+        worksheet.set_paper(9)
+        worksheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+
+        worksheet.set_default_row(30)
+
+        # Set width column
+        worksheet.set_column('A:A', 13)
+
+        title_range = 'A1:H1'
+        b_column = 50
+        if column_start:
+            title_range = 'A1:I1'
+            b_column = 13
+            worksheet.set_column('C:C', 50)
+            worksheet.set_column('D:I', 13)
+        else:
+            worksheet.set_column('C:H', 13)
+
+        worksheet.set_column('B:B', b_column)
+
+        worksheet.merge_range(title_range, 'NHẬT TRÌNH CỦA XE BIỂN KIỂM SOÁT: %s \n Từ ngày %s đến ngày %s' % (vehicle_name, date_from, date_to), format1)
+        worksheet.merge_range(1, 0, 2, 0, 'Ngày tháng', format1)
+        
+        if column_start:
+            worksheet.merge_range(1, column_start, 2, column_start, 'Xe', format1)
+
+        worksheet.merge_range(1, column_start + 1, 2, column_start + 1, 'Nội dung và khối lượng công việc thực hiện', format1)
+        
+        worksheet.merge_range(1, column_start + 2, 1, column_start + 4, 'Số Km vận hành', format1)
+        worksheet.write(2, column_start + 2, 'Đầu kỳ', format1)
+        worksheet.write(2, column_start + 3, 'Cuối kỳ', format1)
+        worksheet.write(2, column_start + 4, 'Phát sinh', format1)
+
+        worksheet.merge_range(1, column_start + 5, 2, column_start + 5, 'Giờ cẩu', format1)
+        worksheet.merge_range(1, column_start + 6, 2, column_start + 6, 'Giờ chạy máy phát (Xe Hotline)', format1)
+        worksheet.merge_range(1, column_start + 7, 2, column_start + 7, 'Ký xác nhận (ghi rõ họ tên)', format1)
+
+        begin_row = 3
+        for line in data_list:
+            worksheet.write(begin_row, 0, line['create_date'], format1)
+            if column_start:
+                worksheet.write(begin_row, column_start, line['number'], format1)
+            worksheet.write(begin_row, column_start + 1, line['content'], format1)
+            worksheet.write(begin_row, column_start + 2, line['start_km'], format1)
+            worksheet.write(begin_row, column_start + 3, line['end_km'], format1)
+
+            km_total = 0
+            if line['start_km'] and line['end_km']:
+                start_km = line['start_km']
+                end_km = line['end_km']
+
+                if '.' in start_km:
+                    start_km = start_km.replace('.', '')
+
+                if '.' in end_km:
+                    end_km = end_km.replace('.', '')
+
+                start_km = float(start_km)
+                end_km = float(end_km)
+
+                if start_km < end_km:
+                    km_total = end_km - start_km
+
+            worksheet.write(begin_row, column_start + 4, km_total, format1)
+            worksheet.write(begin_row, column_start + 5, line['crane_hour'], format1)
+            worksheet.write(begin_row, column_start + 6, line['generator_firing_hour'], format1)
+
+            begin_row += 1
+
+        workbook.close()
+        return response
+
+    else:
+        return redirect('/vehicle/unexpected_error/')
+
+def export_xlsx_form_1(request):
+    if request.method == "GET" and request.user.pk:
+        date_from = request.GET['date_from']
+        date_to = request.GET['date_to']
+        vehicle_id = request.GET['vehicle_id']
+
+        data_list = []
+        if date_from and date_to:
+            _date_from = convertDate(date_from) + ' 00:00:00'
+            _date_to = convertDate(date_to) + ' 23:59:59'
+            data_list = get_stage_info(_date_from, _date_to, vehicle_id)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = "attachment; filename=BienBanKiemTraChiSoKm.xlsx"
+        # Create a workbook and add a worksheet.
+        workbook = xlsxwriter.Workbook(response, {'in_memory': True})
+    
+        worksheet = workbook.add_worksheet()
+        format1 = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format1.set_align('center')
+        format1.set_align('vcenter')
+        format1.set_font('Times New Roman')
+
+        format_fs10 = workbook.add_format({'font_size': 11, 'align': 'center', 'text_wrap': 1})
+        format_fs10.set_align('center')
+        format_fs10.set_align('vcenter')
+        format_fs10.set_font('Times New Roman')
+
+        format_unl = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format_unl.set_align('center')
+        format_unl.set_align('vcenter')
+        format_unl.set_font('Times New Roman')
+        format_unl.set_underline()
+
+        format_itl = workbook.add_format({'font_size': 12, 'align': 'center', 'text_wrap': 1})
+        format_itl.set_align('center')
+        format_itl.set_align('vcenter')
+        format_itl.set_font('Times New Roman')
+        format_itl.set_italic()
+
+        format_left_align = workbook.add_format({'font_size': 12, 'align': 'left', 'text_wrap': 1})
+        format_left_align.set_font('Times New Roman')
+
+        worksheet.print_area('A1:H40')
+        worksheet.fit_to_pages(1, 0)
+        worksheet.set_landscape()
+        worksheet.set_paper(9)
+        worksheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+
+        worksheet.set_default_row(20)
+
+        # Set width column
+        worksheet.set_column('A:A', 5)
+
+        worksheet.set_column('B:P', 10)
+        
+        worksheet.merge_range('A1:C1', 'CÔNG TY ĐIỆN LỰC QUẢNG NAM', format_fs10)
+        worksheet.merge_range('D1:H1', 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', format1)
+
+        worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
+        worksheet.merge_range('D2:H2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
+
+        worksheet.merge_range('D4:H4', datetime.now().strftime('Tam Kỳ, ngày %d tháng %m năm %Y'), format_itl)
+
+        worksheet.merge_range('A5:H5', 'BIÊN BẢN KIỂM TRA CHỐT CHỈ SỐ KM', format1)
+        worksheet.merge_range('A6:H6', 'Hôm nay, vào lúc ... giờ 00 phút ngày ... tháng ... năm 2022 chúng tôi gồm có :', format_left_align)
+        worksheet.merge_range('A7:C7', 'Ông:', format_left_align)
+        worksheet.merge_range('D7:H7', 'Chức vụ: Phó Chánh Văn Phòng', format_left_align)
+        worksheet.merge_range('A8:C8', 'Ông:', format_left_align)
+        worksheet.merge_range('D8:H8', 'Chức vụ: Lái xe', format_left_align)
+
+        worksheet.merge_range('A9:H9', 'Cùng kiểm tra chốt chỉ số km các phương tiện vận tải, cụ thể sau:', format_left_align)
+
+        worksheet.merge_range(10, 0, 11, 0, 'STT', format1)
+        worksheet.merge_range(10, 1, 11, 1, 'Tên PTVT', format1)
+        worksheet.merge_range(10, 2, 11, 2, 'Km đầu kỳ', format1)
+        worksheet.merge_range(10, 3, 11, 3, 'Km cuối kỳ', format1)
+        worksheet.merge_range(10, 4, 10, 6, 'Km phát sinh', format1)
+
+        worksheet.write('E12', 'Tổng Km', format1)
+        worksheet.write('F12', 'Phục vụ SXKD', format1)
+        worksheet.write('G12', ' Ban QLDA', format1)
+
+        worksheet.merge_range(10, 7, 11, 7, 'Ghi chú', format1)
+
+        begin_row = 12
+        stt = 1
+
+        for line in data_list:
+            worksheet.write(begin_row, 0, stt, format1)
+            worksheet.write(begin_row, 1, line['number'], format1)
+            # worksheet.write(begin_row, 0, line['create_date'], format1)
+            # worksheet.write(begin_row, 2, line['content'], format1)
+            worksheet.write(begin_row, 2, line['start_km'], format1)
+            worksheet.write(begin_row, 3, line['end_km'], format1)
+
+            km_total = 0
+            if line['start_km'] and line['end_km']:
+                start_km = float(line['start_km'].replace(',00', '').replace('.', ''))
+                end_km = float(line['end_km'].replace(',00', '').replace('.', ''))
+                if start_km < end_km:
+                    km_total = end_km - start_km
+
+            worksheet.write(begin_row, 4, km_total, format1)
+            worksheet.write(begin_row, 5, '', format1)
+            worksheet.write(begin_row, 6, '', format1)
+            worksheet.write(begin_row, 7, '', format1)
+            
+            stt += 1
+            begin_row += 1
+        
+        worksheet.write(begin_row, 0, '', format1)
+        worksheet.merge_range(begin_row, 1, begin_row, 2, 'Tổng cộng: ', format1)
+        worksheet.write(begin_row, 3, '', format1)
+        worksheet.write(begin_row, 4, '', format1)
+        worksheet.write(begin_row, 5, '', format1)
+        worksheet.write(begin_row, 6, '', format1)
+
+        worksheet.merge_range(begin_row + 1, 0, begin_row + 1, 4, 'Biên bản kết thúc vào lúc ... giờ ... phút cùng ngày.', format_left_align)
+
+        worksheet.merge_range(begin_row + 3, 0, begin_row + 3, 7, 'HỘI ĐỒNG KIỂM TRA', format1)
+        worksheet.merge_range(begin_row + 4, 0, begin_row + 4, 3, 'VĂN PHÒNG', format1)
+        worksheet.merge_range(begin_row + 4, 4, begin_row + 4, 7, 'NGƯỜI LẬP', format1)
+
+        workbook.close()
+        return response
+
+    else:
+        return redirect('/vehicle/unexpected_error/')
+
+
+class VehicleWorkingStageView(View):
+    def get(self, request):
+        try:
+            calendar_id = request.GET['cid']
+            
+            calendar = VehicleWorkingStage.objects.filter(calender=calendar_id).first()
+            
+            vehicle_calender = ModelVehicleCalender.objects.get(id=calendar_id)
+            vehicle_type = vehicle_calender.vehicle_type
+            
+            is_crane = False
+            if vehicle_type:
+                is_left_tab = vehicle_type.is_left_tab
+                if not is_left_tab:
+                    is_crane = True
+            
+            disabled_confirm_btn = False
+            disabled_save_btn = False
+
+            if not request.user.has_perm("vehicle.driver_vehicle"):
+                disabled_save_btn = True
+
+            if calendar:
+                form = VehicleWorkingStageForm(instance=calendar)   
+                disabled_confirm_btn = _check_validate(calendar, is_crane)      
+            else:
+                form = VehicleWorkingStageForm()
+            
+            if request.user.is_active and request.user.is_superuser:
+                has_perm_work_perform = True
+            else:
+                has_perm_work_perform = check_perm_work_perform(request.user.id, calendar_id)
+
+            context = {
+                'form': form, 
+                'cid': calendar_id, 
+                'is_crane': is_crane,
+                'disabled_save_btn': disabled_save_btn,
+                'disabled_confirm_btn': disabled_confirm_btn,
+                'has_perm_work_perform': has_perm_work_perform
+            }
+            return render(request, "vehicle/vehicle_stage_modal_view.html", context)
+        except Exception as exc:
+            print(exc)
+            LoggingFile(exc)
+            return redirect('/vehicle/unexpected_error/')
+    
+    def post(self, request):
+        try:
+            user_id = request.user
+            calendar_id = request.GET['cid']
+            calendar_record = ModelVehicleCalender.objects.get(id=calendar_id)
+            calendar = VehicleWorkingStage.objects.filter(calender=calendar_id).first()
+            
+            if request.method == 'POST':
+                if calendar:
+                    start_odo_image_url = end_odo_image_url = False
+                    if calendar.start_odo_image:
+                        start_odo_image_url = calendar.start_odo_image.url
+                    if calendar.end_odo_image:
+                        end_odo_image_url = calendar.end_odo_image.url
+
+                    form = VehicleWorkingStageForm(request.POST, request.FILES, instance=calendar)
+                    
+                    if form.is_valid() and form.has_changed():
+                        # Remove image out dir
+                        query_dict = dict(form.data)
+                        if query_dict.get('start_odo_image-clear', False):
+                            if len(query_dict.get('start_odo_image-clear')) == 1 and query_dict.get('start_odo_image-clear')[0] == 'on':
+                                if '/files' in start_odo_image_url:
+                                    start_odo_image_url = start_odo_image_url.replace('/files', '')
+                                    remove_image(start_odo_image_url)
+
+                        if query_dict.get('end_odo_image-clear', False):
+                            if len(query_dict.get('end_odo_image-clear')) == 1 and query_dict.get('end_odo_image-clear')[0] == 'on':
+                                if '/files' in end_odo_image_url:
+                                    end_odo_image_url = end_odo_image_url.replace('/files', '')
+                                    remove_image(end_odo_image_url)
+                        
+                        post = form.save(commit=False)
+                        post.write_uid = user_id
+                        post.write_date = datetime.now()
+                        post.save()
+                else:
+                    form = VehicleWorkingStageForm(request.POST, request.FILES)
+                    post = form.save(commit=False)
+                    post.create_uid = user_id
+                    post.create_date = datetime.now()
+                    post.calender = calendar_record
+                    post.save()
+
+            return redirect(request.environ['HTTP_REFERER'])
+        except Exception as exc:
+            print(exc)
+            LoggingFile(exc)
+            return HttpResponse("false")
+
+
+def _check_validate(record, is_crane):
+    check_valid = False
+    check_crane = False
+
+    if is_crane == True:
+        if record.crane_hour and record.generator_firing_hour:
+            check_crane = True
+
+    if record.start_km and record.start_odo_image and record.end_km and record.end_odo_image:
+        check_valid = True
+    
+    return check_valid
+
+def stage_confirm_action(request):
+    try:
+        if request.method == 'POST':
+            sid = request.POST['stage_id']
+            status = request.POST['status']
+
+            approver_id = request.user
+
+            record = VehicleWorkingStage.objects.get(id=sid)
+            
+            check_valid = _check_validate(record, False)
+
+            has_perm_driver = request.user.has_perm("vehicle.driver_vehicle")            
+            has_perm_register = request.user.has_perm("vehicle.register_vehicle")
+
+            if not check_valid:
+                return HttpResponse("no_valid")
+
+            if has_perm_register:
+                if status == "NEW":
+                    VehicleWorkingStage.objects.filter(id=sid, status="NEW").update(status="CONFIRM", approved_by=approver_id)
+                    return HttpResponse("true")
+                elif status == "CONFIRM":
+                    VehicleWorkingStage.objects.filter(id=sid, status="CONFIRM").update(status="NEW")
+                    return HttpResponse("cancel")
+                else:
+                    return HttpResponse("false")
+            else:
+                return HttpResponse("no_perm")
+
+    except Exception as exc:
+        print(exc)
+        return HttpResponse("false")
+
+def remove_image(image_path):
+    try:
+        path = settings.MEDIA_ROOT + image_path
+        exist = os.path.exists(path)
+        if exist:
+            os.remove(path)
+    except ValueError as e:
+        print('ValueError: ', e)
+
+def confirm_division(request):
+    try:
+        if request.method == 'POST':
+            user_id = request.user.pk
+            data_string = request.POST.get('json_data')
+            # Convert string dict into json dict by loads()
+            data_dict = json.loads(data_string)
+            calender_id = data_dict["calender_id"]
+            users_check = data_dict["users_check"]
+            users_no_check = data_dict["users_no_check"]
+            date = data_dict["date"]
+            selected_depart = data_dict["chair_unit_id"]
+
+            vehicle = ModelVehicleCalender.objects.get(id=calender_id)
+            week_calender = vehicle.calender
+
+            if not week_calender:
+                AssignModel = AssignedUser
+                MainCalenderModel = ModelVehicleCalender
+                _id = calender_id
+            else:
+                AssignModel = Working_Division
+                MainCalenderModel = Calender
+                _id = week_calender.id
+
+            # If user do not exist in db then INSERT 2 table, otherwise then UPDATE
+            for user in users_check:
+                # filter() can use id and get() must be instance of class
+                if AssignModel.objects.filter(calender=_id, user=int(user)).exists() == False:
+                    # print("======INSERT=============")
+                    insert = AssignModel(calender=MainCalenderModel.objects.get(id=_id), user=User.objects.get(id=user), active=True, create_uid=request.user)
+                    insert.save()
+                else:
+                    # print("======UPDATE==============")
+                    AssignModel.objects.filter(calender=_id, user=int(user)).update(active=True, write_uid=user_id, write_date=datetime.now())  
+            # If user that not check exists in db then update active
+            for user in users_no_check:
+                if AssignModel.objects.filter(calender=_id, user=int(user)).exists() == True:
+                    # print("==================UPDATE NO ACTIVE===================")
+                    AssignModel.objects.filter(calender=_id, user=int(user)).update(active=False, write_uid=user_id, write_date=datetime.now())  
+                
+            return HttpResponse("true")
+
+    except Exception as exc:
+        print(exc)
+        return HttpResponse("false")
+    
+def check_perm_work_perform(user_id, vc_id):
+    try:
+        record = ModelVehicleCalender.objects.get(id=vc_id)
+
+        # If record has week calender
+        assigned_calender = []
+
+        if record.calender:
+            if hasattr(record.calender, 'id'):
+                c_id = record.calender.id
+                assigned_calender = Working_Division.objects.filter(calender=c_id)
+        else:
+            assigned_calender = AssignedUser.objects.filter(calender=vc_id)
+        
+        assigned_user_list = [item.user.id for item in assigned_calender if item.user]
+
+        if user_id in assigned_user_list:
+            return True
+
+        return False
+
+    except Exception as exc:
+        print(exc)
+        LoggingFile(exc)
+        return None

@@ -14,7 +14,7 @@
                     <div class="text-center">
                         <span style="color:red; font-size:15px; font-weight:bold;">{{ j.content }}</span>
                     </div>
-                    <div class="container_checkbox">
+                    <div class="">
                         <div class="form-row">
                             <div class="form-group col-md-6">
                                 <label for="start_time">Thời gian đi</label>
@@ -78,6 +78,7 @@
 
 <script>
     $(document).ready(function () {
+        $('input[type="checkbox"]').next('label').remove();
         $('#division').chosen();
         
         // Xóa select nhập do jet lib

@@ -26,16 +26,17 @@
   }
   
   /* Hide the browser's default checkbox */
-  .container_checkbox input {
+  input[type=checkbox].form-check-input {
+    display: block;
     /* position: absolute;
     opacity: 0;
     cursor: pointer;
     height: 0;
     width: 0; */
   }
-  input[type=checkbox] {
+  /* input[type=checkbox] {
     display: block;
-  }
+  } */
 
   /* Create a custom checkbox */
   .checkmark {

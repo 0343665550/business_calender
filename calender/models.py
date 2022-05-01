@@ -228,6 +228,7 @@ class Calender(models.Model):
     create_uid = models.ForeignKey(User, verbose_name="Người tạo", on_delete=models.CASCADE)
     create_depart_id_id = models.IntegerField('Phòng tạo')
     slide_show = models.BooleanField('Trình chiếu', default=False)
+    management_fee = models.BooleanField('Chi phí BQL', default=False)
 
     class Meta:
         verbose_name = _('Lịch công tác')

@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('calender', '0029_auto_20201114_1019'),
+        # ('calender', '0029_auto_20201114_1019'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

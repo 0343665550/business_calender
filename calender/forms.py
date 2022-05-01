@@ -50,7 +50,7 @@ class CalenderChangeForm(forms.ModelForm):
     class Meta:
         model = Calender
         # fields = "__all__"
-        fields = ['start_time', 'end_time', 'location', 'address', 'chair_unit', 'join_quantity', 'content', 'requirement1', 'requirement2', 'requirement3', 'requirement4', 'requirement5', 'other_requirements', 'join_component', 'other_component', 'prepare_unit', 'other_prepare']
+        fields = ['start_time', 'end_time', 'location', 'address', 'chair_unit', 'join_quantity', 'content', 'requirement1', 'requirement2', 'requirement3', 'requirement4', 'requirement5', 'other_requirements', 'join_component', 'other_component', 'prepare_unit', 'other_prepare', 'management_fee']
         # localized_fields = ('start_time',)
 
     def __init__(self, *args, **kwargs):
@@ -71,7 +71,7 @@ class CalenderChangeForm(forms.ModelForm):
         # name = cleaned_data.get('name')
         # print('CLEAN DATA: ', cleaned_data)
         # print('CLEAN DATA count: ', len(cleaned_data))
-        if len(cleaned_data) != 17:
+        if len(cleaned_data) != 18:
             raise forms.ValidationError('Hãy sửa lỗi sai dưới đây')
         return cleaned_data
     

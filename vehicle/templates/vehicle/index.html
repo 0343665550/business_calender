@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="{% static 'admin/css/override.css' %}" />
 <!--Select multi chosen related division vehicle-->
 <link rel="stylesheet" href="{% static 'calender/vendor/mutil_select_chosen/chosen/chosen.css' %}" />
+<link rel="stylesheet" href="{% static 'calender/css/working_division.css' %}" />
 
 <img onclick="topFunction()" id="myBtn" title="Go to top" src="{% static 'calender/images/f-top.png/' %}">
 
@@ -30,6 +31,7 @@
             {% include "vehicle/addition_tab.html" %}
             <!-- The Modal Phân công Dự họp-->
             <div id="containerModal"></div>
+            <div id="containerModalVehicleStage"></div>
         </div>
         <!-- FOOTER -->
     </div>
@@ -43,6 +45,7 @@
 <script type="text/javascript" src="{% static 'admin/switch-alert/sweetalert2.min.js' %}"></script>
 <script src="{% static 'calender/vendor/mutil_select_chosen/chosen/chosen.jquery.js' %}" type="text/javascript"></script>
 <script type="text/javascript" src="{% static 'vehicle/js/vehicle_right.js' %}"></script>
+<script src="{% static 'vehicle/js/working_division.js' %}" type="text/javascript"></script>
 <script type="text/javascript">
     function send(){
         var dmy1 = document.forms["myformdate"]["theDate"].value;
@@ -86,6 +89,7 @@
         }
     });
 
+    
     $(document).ready(function () {
         $('input[type="checkbox"]').next('label').remove();
         // Xóa select nhập do jet lib
@@ -235,6 +239,7 @@
                 success: function (resp) {
                     containerModal.html(resp);
                     $("#modalDivision").modal();
+                    $('label[for="end_odo_image-clear_id"]').remove();
                 },
                 error: function(xhr, status, error){
                     var errorMessage = xhr.status + ': ' + xhr.statusText
@@ -243,7 +248,28 @@
             });
         });
 
-    })
+        // Ajax to display modal vehicle working stage
+        var containerModalVehicleStage = $("#containerModalVehicleStage");
+        $(".vehicle_stage").on('click', function () {
+            var calenderId = $(this).attr("data-id");
+            // alert("opened: "+ calenderId);
+            $.ajax({
+                url: "/vehicle/vehicle_stage/?cid=" + calenderId,
+                type: "GET",
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function (resp) {
+                    containerModalVehicleStage.html(resp);
+                    $("#modalVehicleStage").modal();
+                },
+                error: function(xhr, status, error){
+                    var errorMessage = xhr.status + ': ' + xhr.statusText
+                    alert('Sorry - ' + errorMessage);
+                }
+            });
+        });
+        
+        
+    });
     
     
 </script>

@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.admin.widgets import AdminSplitDateTime
-from .models import VehicleCalender, VehicleType, Vehicle
+from .models import VehicleCalender, VehicleType, Vehicle, VehicleWorkingStage
 from calender.models import Department, Profile
 from django.core.exceptions import ValidationError
 
@@ -12,7 +12,7 @@ class CalenderUpdateDetailForm(forms.ModelForm):
     class Meta:
         model = VehicleCalender
         # fields = "__all__"
-        fields = ['start_time', 'end_time', 'departure', 'destination', 'expected_km', 'expected_crane_hour', 'seat_number', 'vehicle_type', 'content', 'status', 'note',]
+        fields = ['start_time', 'end_time', 'departure', 'destination', 'expected_km', 'expected_crane_hour', 'seat_number', 'vehicle_type', 'content', 'status', 'note', 'management_fee']
         # localized_fields = ('start_time',)
 
     def __init__(self, *args, **kwargs):
@@ -32,7 +32,7 @@ class CalenderAddForm(forms.ModelForm):
     
     class Meta:
         model = VehicleCalender
-        fields = ['start_time', 'end_time', 'departure', 'destination', 'expected_km', 'expected_crane_hour', 'seat_number', 'vehicle_type', 'content', 'note', 'is_appr_manager', 'approved_by_']
+        fields = ['start_time', 'end_time', 'departure', 'destination', 'expected_km', 'expected_crane_hour', 'seat_number', 'vehicle_type', 'content', 'note', 'is_appr_manager', 'approved_by_', 'management_fee']
 
     def __init__(self, *args, **kwargs):
         super(CalenderAddForm, self).__init__(*args, **kwargs)
@@ -46,9 +46,23 @@ class CalenderAddForm(forms.ModelForm):
         if cleaned_data['is_appr_manager'] and cleaned_data['approved_by_'] is None:
             raise ValidationError("Vui lòng chọn người duyệt lịch")
 
+
 class CalenderDisableForm(forms.Form):
     register = forms.CharField(label='Người đăng ký', disabled=True)
     register_unit = forms.CharField(label='Đơn vị đăng ký', disabled=True)
     approved_by = forms.CharField(label='Người duyệt', disabled=True)
     
     fields = "__all__"
+
+
+class VehicleWorkingStageForm(forms.ModelForm):
+
+    class Meta:
+        model = VehicleWorkingStage
+        fields = ['id', 'start_km', 'start_odo_image', 'end_km', 'end_odo_image', 'crane_hour', 'generator_firing_hour', 'status']
+        # fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super(VehicleWorkingStageForm, self).__init__(*args, **kwargs)
+
+    

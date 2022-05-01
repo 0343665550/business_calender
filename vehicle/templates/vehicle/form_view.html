@@ -1,0 +1,217 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+{% load static %}
+<link rel="icon shortcut" type='image/png' href="{% static 'calender/images/favicon.ico' %}" />
+<link rel="stylesheet" href="{% static 'calender/fonts/font-awesome-4.7.0/css/font-awesome.min.css' %}">
+<link rel="stylesheet" href="{% static 'calender/css/geoserver.css' %}" type="text/css" media="screen, projection">
+<link rel="stylesheet" href="{% static 'calender/css/bootstrap.min.css' %}">
+<link rel="stylesheet" href="{% static 'calender/css/dhtmlgoodies_calendar.css' %}" />
+<link rel="stylesheet" href="{% static 'calender/css/screen.css' %}" type="text/css" media="screen, projection">
+<link rel="stylesheet" href="{% static 'calender/css/footer_v2.css' %}" />
+<link rel="stylesheet" href="{% static 'calender/css/bootstrap.min.css' %}">
+<link rel="stylesheet" href="{% static 'admin/sweetalert2/dist/sweetalert2.min.css' %}">
+<link rel="stylesheet" href="{% static 'admin/css/override.css' %}" />
+<!-- Select2 CSS --> 
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/css/select2.min.css" rel="stylesheet" /> 
+
+
+<style>
+        #pills-tab li {
+                list-style-type: none;
+        }
+        .form-row {
+                display: block;
+        }
+        body {
+                background-color: #f8fafc;
+        }
+        table {
+                width: -webkit-fill-available;
+        }
+</style>
+
+<div id="content-main">
+    <div id="toolbar" class="initialized">
+        <form id="changelist-search" method="post">
+                {% csrf_token %}
+                <div class="row">
+                    <h4>BIỂU MẪU</h4>
+                </div>
+                <div class="row" style="float:left; display:flex;">
+                    <!-- DIV needed for valid HTML -->
+                    <span class="changelist-filter-select-wrapper" style="padding-top: 29px;">
+                        <select id="selForm">
+                            <option value="0">Chọn biểu mẫu </option>
+                            <option value="1" {% if form_id == '1' %}
+                                selected
+                            {% endif %}>Nhật trình</option>
+                            <option value="2" {% if form_id == '2' %}
+                                selected
+                            {% endif %}>Biên bản kiểm tra chốt chỉ số km</option>
+                        </select>
+                    </span>
+
+                    <span class="changelist-filter-select-wrapper">
+                        <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Từ</span><br>
+                        <input type="text" value="{{ date_from }}" style="height:30px; width:200px;" readonly name="dateFrom" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms[0].dateFrom,'dd-mm-yyyy',this)">
+                    </span>
+
+                    <span class="changelist-filter-select-wrapper">
+                        <span class="badge badge-primary" style="font-weight:bold; font-size:12px; margin: 5px 0px;">Đến</span><br>
+                        <input type="text" value="{{ date_to }}" style="height:30px; width:200px;" readonly name="dateTo" placeholder="Chọn ngày, tháng" onclick="displayCalendar(document.forms[0].dateTo,'dd-mm-yyyy',this)">
+                    </span>
+
+                    <span class="changelist-filter-select-wrapper" style="padding-top: 29px;">
+                        <select id="selVehicle">
+                            <option value="0">Tất cả xe </option>
+                            {% for vehicle in vehicle_list %}
+                                <option value="{{ vehicle.id }}"
+                                {% if vehicle.id == vehicle_id %}
+                                    selected
+                                {% endif %}>
+                                    {{ vehicle.name }} ({{ vehicle.number }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </span>
+
+                    <div style="padding-top:15px;">
+                        <button id="search_btn" class="btn btn-primary" type="button" title="Tìm kiếm" style="margin-top: 3px;">Tìm kiếm</button>
+                        
+                        {% if show_button_export %}
+                            <a href="/vehicle/{{url_name}}/?date_from={{date_from}}&date_to={{date_to}}&vehicle_id={{vehicle_id}}">
+                                <button type="button" class="btn btn-success fa fa-download o_list_export_xlsx" title="Export All"></button>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+        </form>
+    </div>
+    <form method="post" novalidate="">
+        {% comment %} {% csrf_token %} {% endcomment %}
+        <div class="results">
+                <table id="result_list">
+                    <thead>
+                        <tr class="headlcn">
+                            <th class="" width="10%">
+                                <div class="text">Ngày</div>
+                            </th>
+                            {% if vehicle_id == 0 %}
+                                <th class="" width="10%">
+                                    <div class="text">Xe</div>
+                                </th>
+                            {% endif %}
+                            <th class="" width="25%">
+                                <div class="text">Nội dung</div>
+                            </th>
+                            <th class="" width="10%">
+                                <div class="text">Đầu kỳ</div>
+                            </th>
+                            <th class="" width="10%">
+                                <div class="text">Cuối kỳ</div>
+                            </th>
+                            <th class="" width="10%">
+                                <div class="text">Giờ cẩu</div>
+                            </th>
+                            <th class="" width="10%">
+                                <div class="text">Giờ chạy máy phát</div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data_list %}
+                            <tr class="row1">
+                            
+                                <td class="">{{ item.create_date }}</td>
+                                {% if vehicle_id == 0 %}
+                                    <td class="">{{ item.number }}</td>
+                                {% endif %}
+                                <td class="">{{ item.content }}</td>
+                                <td class="">
+                                    {% if ',00' in item.start_km %}
+                                        {{ item.start_km|cut:",00" }}
+                                    {% else %}
+                                        {{ item.start_km }}
+                                    {% endif %}
+                                </td>
+                                <td class="">
+                                    {% if ',00' in item.end_km %}
+                                        {{ item.end_km|cut:",00" }}
+                                    {% else %}
+                                        {{ item.end_km }}
+                                    {% endif %}
+                                </td>
+                                <td class="">{{ item.crane_hour }}</td>
+                                <td class="">{{ item.generator_firing_hour }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+        </div>
+    </form>
+</div>
+
+<script src="{% static 'calender/js/jquery.min-3.5.1.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/dhtmlgoodies_calendar.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/bootstrap.min.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/jquery.form.min.js' %}" type="text/javascript"></script>
+<script src="{% static 'calender/js/collapse-accordition.js' %}" type="text/javascript"></script>
+<script type="text/javascript" src="{% static 'admin/switch-alert/sweetalert2.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-beta.1/dist/js/select2.min.js"></script>
+<script type="text/javascript" src="{% static 'vehicle/js/vehicle_right.js' %}"></script>
+<script type="text/javascript">
+    function convertDate(date) {
+        date_list = date.split("-");
+        return date_list[1] + '-' + date_list[0] + '-' + date_list[2];
+    }
+        $(document).ready(function(){
+                // Xóa select nhập do jet lib
+                $('select[id="selForm"]').removeClass('select2-hidden-accessible');
+                $('select[id="selForm"]').next('span').remove();
+
+                // Initialize select2
+                $("#selForm").select2();
+
+                $('select[id="selVehicle"]').removeClass('select2-hidden-accessible');
+                $('select[id="selVehicle"]').next('span').remove();
+
+                // Initialize select2
+                $("#selVehicle").select2();
+              
+                // Read selected option
+                $('#search_btn').click(function(){
+                        var formId = $('#selForm').val();
+                        var dateFrom = $("input[name='dateFrom']").val();
+                        var dateTo = $("input[name='dateTo']").val();
+                        var vehicleId = $('#selVehicle').val();
+
+                        if (formId == 0) {
+                                Swal.fire(
+                                    'Cảnh báo!',
+                                    'Vui lòng chọn biểu mẫu!',
+                                    'warning'
+                                );
+                        } else {
+                                if(new Date(convertDate(dateTo)) < new Date(convertDate(dateFrom))) {
+                                        Swal.fire(
+                                        'Cảnh báo!',
+                                        'Ngày chọn chưa hợp lệ!',
+                                        'warning'
+                                        );
+                                } else {
+                                        if (formId && dateFrom && dateTo && vehicleId) {
+                                                var path = window.location.protocol + '//' +window.location.hostname + ':' + window.location.port;
+                                                window.location.href = path + "/vehicle/get_form/?form_id="+formId+"&date_from="+dateFrom+"&date_to="+dateTo+"&vehicle_id="+vehicleId;
+                                        }
+                                }
+                        }
+              
+                });
+
+        });
+        
+
+            
+</script>
+{% endblock %}
