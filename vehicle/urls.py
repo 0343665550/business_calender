@@ -22,7 +22,11 @@ urlpatterns = [
     path('view_form/', view_form, name='view_form'),
     path('get_form/', get_form, name='get_form'),
     path('export_xlsx_routine/', export_xlsx_routine, name='export_xlsx_routine'),
-    path('export_xlsx_form_1/', export_xlsx_form_1, name='export_xlsx_form_1')
+    path('export_xlsx_form_1/', export_xlsx_form_1, name='export_xlsx_form_1'),
+    path('export_xlsx_form_2/', export_xlsx_form_2, name='export_xlsx_form_2'),
+    path('export_xlsx_form_3/', export_xlsx_form_3, name='export_xlsx_form_3'),
+    path('export_xlsx_form_4/', export_xlsx_form_4, name='export_xlsx_form_4'),
+    path('export_xlsx_form_5/', export_xlsx_form_5, name='export_xlsx_form_5')
 ]
 
 if settings.DEBUG:

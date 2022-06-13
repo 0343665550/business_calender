@@ -22,7 +22,7 @@ class FuelRate(models.Model):
 
 
 class FuelType(models.Model):
-    name = models.CharField('Loại nhiên liệu', max_length=255, unique=True)
+    name = models.CharField('Loại nhiên liệu', max_length=255, choices=[('Xăng', 'Xăng'), ('Dầu', 'Dầu')], default='Xăng')
     price = models.FloatField('Giá/Lít')
     start_time = models.DateTimeField('Thời gian bắt đầu', null=True)
     end_time = models.DateTimeField('Thời gian kết thúc', null=True)
@@ -31,6 +31,7 @@ class FuelType(models.Model):
     write_uid = models.ForeignKey(User, verbose_name="Người sửa", related_name="+", on_delete=models.SET_NULL, null=True)
     create_date = models.DateTimeField('Ngày tạo', auto_now_add=True)
     write_date = models.DateTimeField('Ngày sửa', null=True)
+    is_track = models.BooleanField('Cập nhật thông tin & lưu lại dữ liệu cũ', default=False)
 
     class Meta:
         verbose_name = _('Loại nhiên liệu')
@@ -74,6 +75,15 @@ class Vehicle(models.Model):
     # fuel_rate = models.FloatField('Định mức nhiên liệu', null=True, blank=True)
     fuel_rate = models.ForeignKey(FuelRate, verbose_name='Định mức nhiên liệu', on_delete=models.CASCADE, null=True)
     fuel_type = models.ForeignKey(FuelType, verbose_name='Loại nhiên liệu', on_delete=models.CASCADE, null=True)
+    # fuel_type_ids = models.ManyToManyField(
+    #     FuelType,
+    #     verbose_name=_('Loại nhiên liệu theo xe'),
+    #     blank=True,
+    #     db_table='vehicle_fuel_type_rel',
+    #     related_name="+"
+    # )
+    crane_fuel_rate = models.ForeignKey(FuelRate, related_name='crane', verbose_name='Định mức nhiên liệu cẩu', on_delete=models.CASCADE, null=True, blank=True)
+    generator_firing_fuel_rate = models.ForeignKey(FuelRate, related_name='generator_firing', verbose_name='Định mức nhiên liệu nổ máy phát', on_delete=models.CASCADE, null=True, blank=True)
 
     class Meta:
         verbose_name = _("Xe")
@@ -221,6 +231,8 @@ class VehicleWorkingStage(models.Model):
     create_date = models.DateTimeField('Ngày tạo', auto_now_add=True)
     write_date = models.DateTimeField('Ngày sửa', null=True)
     approved_by = models.ForeignKey(User, verbose_name="Người duyệt", related_name="+", on_delete=models.SET_NULL, null=True)
+    fuel_type = models.ForeignKey(FuelType, verbose_name='Loại nhiên liệu', on_delete=models.CASCADE, null=True, blank=True)
+    vehicle = models.ForeignKey(Vehicle, verbose_name="Xe", on_delete=models.CASCADE, null=True)
 
     def __str__(self):
         return str(self.calender)

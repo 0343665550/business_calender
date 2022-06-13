@@ -59,10 +59,12 @@ class VehicleWorkingStageForm(forms.ModelForm):
 
     class Meta:
         model = VehicleWorkingStage
-        fields = ['id', 'start_km', 'start_odo_image', 'end_km', 'end_odo_image', 'crane_hour', 'generator_firing_hour', 'status']
+        fields = ['id', 'start_km', 'start_odo_image', 'end_km', 'end_odo_image', 'crane_hour', 'generator_firing_hour', 'status', 'vehicle']
         # fields = "__all__"
 
     def __init__(self, *args, **kwargs):
         super(VehicleWorkingStageForm, self).__init__(*args, **kwargs)
-
-    
+        # Create new one OR Update old one
+        if self.initial.get('vehicle'):
+            vehicle_id = self.initial.get('vehicle')
+            self.fields['vehicle'].queryset = Vehicle.objects.filter(id=vehicle_id)

@@ -1,13 +1,16 @@
 from django.contrib import admin
+from django.forms import ModelForm
 from vehicle.models import *
 from vehicle.views import sql_calender_detail, date_of_week
 from datetime import datetime
 from calender.models import *
 from django.http import HttpResponse
 from calender.views import start_end_of_week, getDepartment, convertNumberWeek, getGroupUserId,\
-getDepartmentUserId, getlistusers
+getDepartmentUserId, getlistusers, execute_sql
 from django.urls import path
 from django.template.response import TemplateResponse
+from django.shortcuts import redirect
+from django.core.exceptions import ValidationError
 
 # Register your models here.
 
@@ -57,18 +60,31 @@ class VehicleTypeAdmin(admin.ModelAdmin):
 
 
 class VehicleAdmin(admin.ModelAdmin):
+    class Media:
+        js = (
+            "admin/js/vehicle_type_change.js",
+        )
+        # css = {
+        #     'all': (
+        #         "admin/css/vehicle_form.css",
+        #     )
+        # }
     ordering = ['name', 'manage_unit']
-    list_display = ('name', 'number', 'frame_number', 'machine_number', 'fuel', 'fuel_type', 'fuel_rate', 'manage_unit', 'vehicle_type')
+    list_display = ('name', 'number', 'frame_number', 'machine_number', 'fuel', 'fuel_type', 'fuel_rate', 'crane_fuel_rate', 'generator_firing_fuel_rate', 'manage_unit', 'vehicle_type')
     # Search foreignkey fields is error
     search_fields = ('name', 'number', 'frame_number', 'machine_number', 'fuel', 'fuel_type__name', 'fuel_rate__name', 'manage_unit__name', 'vehicle_type__name')
-    list_filter = ('name', 'number', 'frame_number', 'machine_number', 'fuel_rate', 'fuel', 'fuel_type', 'manage_unit', 'vehicle_type__name')
+    list_filter = ('name', 'number', 'frame_number', 'machine_number', 'fuel_rate', 'crane_fuel_rate', 'generator_firing_fuel_rate', 'fuel', 'fuel_type', 'manage_unit', 'vehicle_type__name')
     fieldsets = [
         ['Thông tin xe', {
-            'fields': ['name', 'number', 'frame_number', 'machine_number', 'fuel', 'fuel_type', 'fuel_rate', 'manage_unit', 'vehicle_type', 'note']
+            'fields': ['name', 'number', 'frame_number', 'machine_number', 'fuel', 'fuel_type', 'fuel_rate', 'crane_fuel_rate', 'generator_firing_fuel_rate', 'manage_unit', 'vehicle_type', 'note']
         }],
     ]
     
     readonly_fields = ()
+
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self.fields['fuel_type'].queryset = FuelType.objects.filter(active=True)
 
     def has_view_permission(self, request, obj=None): 
         # opts = self.opts
@@ -107,32 +123,19 @@ class VehicleAdmin(admin.ModelAdmin):
             obj.write_uid = request.user
         super(VehicleAdmin, self).save_model(request, obj, form, change)
 
-    def get_urls(self):
-        urls = super().get_urls()
-        my_urls = [
-            path('my_view/', self.admin_site.admin_view(self.my_view))
-        ]
-        return my_urls + urls
-
-    def my_view(self, request):
-        # ...
-        context = dict(
-           # Include common variables for rendering the admin template.
-           self.admin_site.each_context(request), {}
-        )
-        return TemplateResponse(request, "500_ISE.html", context)
-
-    # def get_readonly_fields(self, request, obj=None):
-    #     if request.user.has_perm("vehicle.change_fuel_rate"):
-    #         return self.readonly_fields
-    #     return super().get_fieldsets(request, obj=obj)
-
     def changeform_view(self, request, *args, **kwargs):
         # Access right for fuel_rate field
         self.readonly_fields = list(self.readonly_fields)
         if not request.user.has_perm("vehicle.change_fuel_rate"):
             self.readonly_fields.append('fuel_rate')
+        
         return super(VehicleAdmin, self).changeform_view(request, *args, **kwargs)
+
+    def get_form(self, request, obj=None, **kwargs):
+        
+        form = super(VehicleAdmin, self).get_form(request, obj=None, **kwargs)
+        form.base_fields['fuel_type'].queryset = FuelType.objects.filter(active=True)
+        return form
 
 
 class VehicleCalenderAdmin(admin.ModelAdmin):
@@ -161,10 +164,13 @@ class VehicleCalenderAdmin(admin.ModelAdmin):
         week = convertNumberWeek(cur_date)
         status_list = VehicleCalender.STATUS
         register_unit_list = Department.objects.filter(active=True, is_vehicle_calender=True).order_by('group', 'sequence')
-        calender_list = sql_calender_detail(cur_date, "0", True, "ASSIGNED")
+
+        has_perm_driver = request.user.has_perm("vehicle.driver_vehicle")
+        
+        calender_list = sql_calender_detail(cur_date, "0", True, "ASSIGNED", has_perm_driver, user_id)
         date_list = date_of_week(cur_date, "0", True, "ASSIGNED")
         # =================TAB TO THE RIGHT=================
-        calender_list_right = sql_calender_detail(cur_date, "0", False, "ASSIGNED")
+        calender_list_right = sql_calender_detail(cur_date, "0", False, "ASSIGNED", has_perm_driver, user_id)
         date_list_right = date_of_week(cur_date, "0", False, "ASSIGNED")
         # ============================PERMISIONS=============================
         has_perm_add = request.user.has_perm("vehicle.register_vehicle")
@@ -246,14 +252,30 @@ class FuelRateAdmin(admin.ModelAdmin):
         super(FuelRateAdmin, self).save_model(request, obj, form, change)
 
 
+class FuelTypeAdminForm(ModelForm):
+    class Meta:
+        model = FuelType
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_time = cleaned_data.get('start_time')
+        end_time = cleaned_data.get('end_time')
+        if start_time == end_time:
+            raise ValidationError('invalid!')
+        return cleaned_data
+
+
 class FuelTypeAdmin(admin.ModelAdmin):
+    form = FuelTypeAdminForm
+
     ordering = ['name']
-    list_display = ('name', 'price', 'start_time', 'end_time', 'active')
-    search_fields = ('name', 'price', 'start_time', 'end_time', 'active')
-    list_filter = ('name', 'price', 'start_time', 'end_time', 'active')
+    list_display = ('name', 'price', 'start_time', 'end_time', 'is_track', 'active')
+    search_fields = ('name', 'price', 'start_time', 'end_time', 'is_track', 'active')
+    list_filter = ('name', 'price', 'start_time', 'end_time', 'is_track', 'active')
     fieldsets = [
         ['Thông tin loại nhiên liệu', {
-            'fields': ['name', 'price', 'start_time', 'end_time', 'active']
+            'fields': ['name', 'price', 'start_time', 'end_time', 'is_track', 'active']
         }],
     ]
 
@@ -261,10 +283,51 @@ class FuelTypeAdmin(admin.ModelAdmin):
         if obj.pk is None:
             obj.create_uid = request.user
         else:
+            if obj.is_track and 'price' in form.changed_data and \
+                    'start_time' in form.changed_data and 'end_time' in form.changed_data:
+                old_data = FuelType.objects.get(id=obj.id)
+                self.save_old_record(old_data, request.user)
+                # generate data in medium table m2m
+                # vehicles = Vehicle.objects.filter(fuel_type=obj.id)
+                # for item in vehicles:
+                #     sql = "INSERT INTO vehicle_fuel_type_rel(vehicle_id, fueltype_id) VALUES (%s, %s)" % (item.id, obj.id)
+                #     execute_sql(sql)
             obj.write_date = datetime.now()
             obj.write_uid = request.user
         super(FuelTypeAdmin, self).save_model(request, obj, form, change)
+
+    def save_old_record(self, data, uid):
+        old_record = FuelType(name=data.name, 
+                              price=data.price, 
+                              start_time=data.start_time, 
+                              end_time=data.end_time, 
+                              active=False,
+                              is_track=True,
+                              create_uid=uid,
+                              write_uid=data.write_uid,
+                              create_date=data.create_date,
+                              write_date=datetime.now()
+                        )
+        old_record.save()
     
+    def changelist_view(self, request, extra_context=None):
+        default_filter = False
+        try:
+            referrer = request.META.get('HTTP_REFERER', '')
+
+            if '?' not in referrer:
+                default_filter = True
+        except:
+            default_filter = True
+
+        if default_filter:
+            q = request.GET.copy()
+            q['active__exact'] = '1'
+            request.GET = q
+            request.META['QUERY_STRING'] = request.GET.urlencode()
+        return super().changelist_view(request, extra_context=extra_context)
+
+
 admin.site.register(VehicleType, VehicleTypeAdmin)
 admin.site.register(Vehicle, VehicleAdmin)
 admin.site.register(VehicleCalender, VehicleCalenderAdmin)

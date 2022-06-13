@@ -15,6 +15,9 @@ from django.contrib.auth.models import User, Group
 from vehicle.models import *
 from django.core.files.storage import FileSystemStorage
 from django.conf import settings
+from .utils import cal_fee_on_km, get_user_management_depart, convert_number, cal_liter_on_km, Calculation as Cal
+from collections import Counter
+from vietnam_number import n2w
 
 # Create your views here.
 
@@ -113,15 +116,17 @@ def sql_calender_detail(date, departmt, is_left_tab, status="ALL", has_perm_driv
             item["vehicles"] = acronym_depart(rs_vehicle)
             item["drivers"] = acronym_depart(list(map(cut_name, rs_driver)))        # Cut ...(...) name is behind
 
+            item_id = item['id']
             # If vehicle calender exist week calender
             if item["calender_id"]:
+                item_id = item["calender_id"]
                 assign_model = 'calender_working_division'
             else:
                 assign_model = 'vehicle_assigneduser'
 
             sql_division = """select cwd.user_id, u.first_name, u.last_name, u.username, cd.name from %s as cwd inner join (select user_id, first_name, last_name, username, department_id from auth_user au inner join calender_profile cp on au.id = cp.user_id) u on u.user_id = cwd.user_id
                 left join calender_department cd on cd.id = u.department_id where cwd.active = 1 and cwd.calender_id = %s"""
-            rs_division = connect_sql(sql_division % (assign_model, item['id']))
+            rs_division = connect_sql(sql_division % (assign_model, item_id))
             item['division_list'] = acronym_depart(rs_division)
             item['filter_group'] = group_by_depart(rs_division)
 
@@ -133,6 +138,17 @@ def sql_calender_detail(date, departmt, is_left_tab, status="ALL", has_perm_driv
                 view_btn_work_perform = True
             
             item['view_btn_work_perform'] = view_btn_work_perform
+
+            # Checking if all business working stage has confirmed then change color of calendar record
+            all_confirmed = False
+            calender_stage = Vehicle_Division.objects.filter(calender=item['id'], active=True).count()
+            confirmed_stage = VehicleWorkingStage.objects.filter(calender=item['id'], status='CONFIRM').count()
+
+            if calender_stage == confirmed_stage and calender_stage > 0:
+                all_confirmed = True
+            
+            item['all_confirmed'] = all_confirmed
+
         # print("===========================data_list=================================")
         # print(data_list)
         return data_list
@@ -410,7 +426,8 @@ def add_view(request):
                 return redirect('/admin/vehicle/vehiclecalender/')
             # print("form error :", form.errors.as_data())
         else:
-            form = CalenderAddForm(initial={ 'vehicle_type': 1 })
+            user_depart = get_user_management_depart(request.user.id)
+            form = CalenderAddForm(initial={ 'vehicle_type': 1, 'management_fee': user_depart })
 
         context = {
             'form': form
@@ -723,10 +740,10 @@ def get_form_id(id):
     form_dict = {
         '1': 'export_xlsx_routine',
         '2': 'export_xlsx_form_1',
-        '3': '',
-        '4': '',
-        '5': '',
-        '6': ''
+        '3': 'export_xlsx_form_2',
+        '4': 'export_xlsx_form_3',
+        '5': 'export_xlsx_form_4',
+        '6': 'export_xlsx_form_5'
     }
     url_name = form_dict[id]
     return url_name
@@ -770,15 +787,125 @@ def get_form(request):
         LoggingFile(exc)
         return redirect('/vehicle/unexpected_error/')
 
-def get_stage_info(date_from, date_to, vehicle_id):
+def get_stage_info(date_from, date_to, vehicle_id, fuel_type='petrol'):
     try:
         sql = """
-                SELECT vc.content, v.id, v.number, FORMAT(vws.start_km, 'N', 'vi-VN') AS start_km, FORMAT(vws.end_km, 'N', 'vi-VN') AS end_km, CONVERT(VARCHAR(10), vws.create_date, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour
-            FROM vehicle_vehicle_division AS vd INNER JOIN vehicle_vehiclecalender AS vc ON vd.calender_id = vc.id
-            INNER JOIN vehicle_vehicle as v ON v.id = vd.vehicle_id
-            INNER JOIN vehicle_vehicleworkingstage AS vws ON vc.id = vws.calender_id 
+                SELECT v.id, v.number, vc.content, FORMAT(vws.start_km, 'N', 'vi-VN') AS start_km, FORMAT(vws.end_km, 'N', 'vi-VN') AS end_km, 
+            CONVERT(VARCHAR(10), vws.create_date, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour, vc.management_fee
+            FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+            INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
             WHERE vws.create_date  BETWEEN '%s' AND '%s'""" % (date_from, date_to)
 
+        if vehicle_id != '0':
+            sql += ' AND v.id = %s' % (vehicle_id,)
+        
+        if fuel_type == 'diesel':
+            sql += ' AND v.vehicle_type_id != 1'
+        
+        data = connect_sql(sql)
+        
+        return data
+
+    except Exception as exc:
+        print(exc)
+        LoggingFile(exc)
+        return []
+
+def get_fuel_settlement(date_from, date_to, vehicle_id):
+    try:
+        sql = """
+            WITH fee_management AS (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, vc.management_fee, vft.name AS fuel_type
+                    FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+                    INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id
+                    LEFT JOIN vehicle_fueltype as vft ON v.fuel_type_id = vft.id
+                WHERE vws.create_date  BETWEEN '%s' AND '%s' AND v.vehicle_type_id = 1
+            GROUP BY v.id, v.number, vc.management_fee, vft.name
+            HAVING vc.management_fee = 1
+        ), nfm AS 
+        (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, vc.management_fee, vft.name AS fuel_type
+                    FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+                    INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id
+                    LEFT JOIN vehicle_fueltype as vft ON v.fuel_type_id = vft.id
+                WHERE vws.create_date  BETWEEN '%s' AND '%s' AND v.vehicle_type_id = 1
+            GROUP BY v.id, v.number, vc.management_fee, vft.name
+            HAVING vc.management_fee = 0
+        )
+        SELECT fee_management.number, fee_management.id, FORMAT(fee_management.start_km, 'N', 'vi-VN') AS start_km, FORMAT(fee_management.end_km, 'N', 'vi-VN') AS end_km, fee_management.management_fee, fee_management.fuel_type, FORMAT(nfm.start_km, 'N', 'vi-VN') AS nfm_start_km, 
+        FORMAT(nfm.end_km, 'N', 'vi-VN') AS nfm_end_km, nfm.management_fee AS nfm_management_fee, nfm.fuel_type AS nfm_fuel_type FROM fee_management
+        LEFT JOIN nfm ON fee_management.id = nfm.id 
+            """ % (date_from, date_to, date_from, date_to)
+        if vehicle_id != '0':
+            sql += ' AND v.id = %s' % (vehicle_id,)
+        
+        data = connect_sql(sql)
+        
+        return data
+
+    except Exception as exc:
+        print(exc)
+        LoggingFile(exc)
+        return []
+
+# BM3
+def get_crane_fuel_settlement(date_from, date_to, vehicle_id):
+    try:
+        sql = """
+            WITH total AS (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, SUM(vws.crane_hour) AS crane_hour, SUM(vws.generator_firing_hour) AS generator_firing_hour
+                    FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+                    INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id
+                WHERE v.vehicle_type_id != 1 
+                    AND vws.create_date  BETWEEN '{from}' AND '{to}'
+            GROUP BY v.id, v.number
+        ), total_sxkd AS 
+        (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, SUM(vws.crane_hour) AS crane_hour, SUM(vws.generator_firing_hour) AS generator_firing_hour
+                    FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+                    INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
+                WHERE v.vehicle_type_id != 1
+                    AND vws.create_date  BETWEEN '{from}' AND '{to}'
+            GROUP BY v.id, v.number, vc.management_fee
+            HAVING vc.management_fee = 0
+        ), total_dtxd AS 
+        (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, SUM(vws.crane_hour) AS crane_hour, SUM(vws.generator_firing_hour) AS generator_firing_hour
+                    FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+                    INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
+                WHERE v.vehicle_type_id != 1  
+                    AND vws.create_date  BETWEEN '{from}' AND '{to}'
+            GROUP BY v.id, v.number, vc.management_fee
+            HAVING vc.management_fee = 1
+        )
+        SELECT total.number, total.id, total.start_km, total.end_km, total.crane_hour, total.generator_firing_hour, 
+        total_sxkd.start_km AS sxkd_start_km, total_sxkd.end_km AS sxkd_end_km, total_sxkd.crane_hour AS sxkd_crane_hour, total_sxkd.generator_firing_hour AS sxkd_generator_firing_hour,
+        total_dtxd.start_km AS dtxd_start_km, total_dtxd.end_km AS dtxd_end_km, total_dtxd.crane_hour AS dtxd_crane_hour, total_dtxd.generator_firing_hour AS dtxd_generator_firing_hour
+        FROM total
+        LEFT JOIN total_sxkd ON total.id = total_sxkd.id 
+        LEFT JOIN total_dtxd ON total.id = total_dtxd.id 
+            """.format(**{"from": date_from , "to": date_to})
+        
+        if vehicle_id != '0':
+            sql += ' AND v.id = %s' % (vehicle_id,)
+        
+        data = connect_sql(sql)
+        
+        return data
+
+    except Exception as exc:
+        print(exc)
+        LoggingFile(exc)
+        return []
+
+def get_bqlda_fuel_settlement(date_from, date_to, vehicle_id):
+    try:
+        sql = """
+            SELECT v.id, v.number, vc.content, FORMAT(vws.start_km, 'N', 'vi-VN') AS start_km, FORMAT(vws.end_km, 'N', 'vi-VN') AS end_km, 
+                vc.destination, vc.content, vft.price, vc.note,
+                CONVERT(VARCHAR(10), vws.create_date, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour, vc.management_fee
+                FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+                INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
+                LEFT JOIN vehicle_fueltype as vft ON v.fuel_type_id = vft.id
+                WHERE vc.management_fee = 1
+                AND vws.create_date  BETWEEN '{from}' AND '{to}'
+            """.format(**{"from": date_from , "to": date_to})
+        
         if vehicle_id != '0':
             sql += ' AND v.id = %s' % (vehicle_id,)
         
@@ -872,27 +999,19 @@ def export_xlsx_routine(request):
             if column_start:
                 worksheet.write(begin_row, column_start, line['number'], format1)
             worksheet.write(begin_row, column_start + 1, line['content'], format1)
-            worksheet.write(begin_row, column_start + 2, line['start_km'], format1)
-            worksheet.write(begin_row, column_start + 3, line['end_km'], format1)
+            worksheet.write(begin_row, column_start + 2, line['start_km'].replace(',00', '') if ',00' in line['start_km'] else '', format1)
+            worksheet.write(begin_row, column_start + 3, line['end_km'].replace(',00', '') if ',00' in line['end_km'] else '', format1)
 
             km_total = 0
             if line['start_km'] and line['end_km']:
-                start_km = line['start_km']
-                end_km = line['end_km']
 
-                if '.' in start_km:
-                    start_km = start_km.replace('.', '')
-
-                if '.' in end_km:
-                    end_km = end_km.replace('.', '')
-
-                start_km = float(start_km)
-                end_km = float(end_km)
+                start_km = convert_number(line['start_km'])
+                end_km = convert_number(line['end_km'])
 
                 if start_km < end_km:
                     km_total = end_km - start_km
 
-            worksheet.write(begin_row, column_start + 4, km_total, format1)
+            worksheet.write(begin_row, column_start + 4, Cal.convert_dot(km_total), format1)
             worksheet.write(begin_row, column_start + 5, line['crane_hour'], format1)
             worksheet.write(begin_row, column_start + 6, line['generator_firing_hour'], format1)
 
@@ -926,6 +1045,11 @@ def export_xlsx_form_1(request):
         format1.set_align('center')
         format1.set_align('vcenter')
         format1.set_font('Times New Roman')
+
+        format_border = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1, 'border': 1})
+        format_border.set_align('center')
+        format_border.set_align('vcenter')
+        format_border.set_font('Times New Roman')
 
         format_fs10 = workbook.add_format({'font_size': 11, 'align': 'center', 'text_wrap': 1})
         format_fs10.set_align('center')
@@ -977,28 +1101,31 @@ def export_xlsx_form_1(request):
 
         worksheet.merge_range('A9:H9', 'Cùng kiểm tra chốt chỉ số km các phương tiện vận tải, cụ thể sau:', format_left_align)
 
-        worksheet.merge_range(10, 0, 11, 0, 'STT', format1)
-        worksheet.merge_range(10, 1, 11, 1, 'Tên PTVT', format1)
-        worksheet.merge_range(10, 2, 11, 2, 'Km đầu kỳ', format1)
-        worksheet.merge_range(10, 3, 11, 3, 'Km cuối kỳ', format1)
-        worksheet.merge_range(10, 4, 10, 6, 'Km phát sinh', format1)
+        worksheet.merge_range(10, 0, 11, 0, 'STT', format_border)
+        worksheet.merge_range(10, 1, 11, 1, 'Tên PTVT', format_border)
+        worksheet.merge_range(10, 2, 11, 2, 'Km đầu kỳ', format_border)
+        worksheet.merge_range(10, 3, 11, 3, 'Km cuối kỳ', format_border)
+        worksheet.merge_range(10, 4, 10, 6, 'Km phát sinh', format_border)
 
-        worksheet.write('E12', 'Tổng Km', format1)
-        worksheet.write('F12', 'Phục vụ SXKD', format1)
-        worksheet.write('G12', ' Ban QLDA', format1)
+        worksheet.write('E12', 'Tổng Km', format_border)
+        worksheet.write('F12', 'Phục vụ SXKD', format_border)
+        worksheet.write('G12', ' Ban QLDA', format_border)
 
-        worksheet.merge_range(10, 7, 11, 7, 'Ghi chú', format1)
+        worksheet.merge_range(10, 7, 11, 7, 'Ghi chú', format_border)
 
         begin_row = 12
         stt = 1
+        km_amount = 0
+        sxkd_amount = 0
+        qlda_amount = 0
 
         for line in data_list:
-            worksheet.write(begin_row, 0, stt, format1)
-            worksheet.write(begin_row, 1, line['number'], format1)
+            worksheet.write(begin_row, 0, stt, format_border)
+            worksheet.write(begin_row, 1, line['number'], format_border)
             # worksheet.write(begin_row, 0, line['create_date'], format1)
             # worksheet.write(begin_row, 2, line['content'], format1)
-            worksheet.write(begin_row, 2, line['start_km'], format1)
-            worksheet.write(begin_row, 3, line['end_km'], format1)
+            worksheet.write(begin_row, 2, line['start_km'].replace(',00', '') if line['start_km'] else '', format_border)
+            worksheet.write(begin_row, 3, line['end_km'].replace(',00', '') if line['end_km'] else '', format_border)
 
             km_total = 0
             if line['start_km'] and line['end_km']:
@@ -1007,20 +1134,35 @@ def export_xlsx_form_1(request):
                 if start_km < end_km:
                     km_total = end_km - start_km
 
-            worksheet.write(begin_row, 4, km_total, format1)
-            worksheet.write(begin_row, 5, '', format1)
-            worksheet.write(begin_row, 6, '', format1)
-            worksheet.write(begin_row, 7, '', format1)
+            worksheet.write(begin_row, 4, Cal.convert_dot(km_total), format_border)
+
+            amount_total = cal_fee_on_km(km_total, line['id'])
+
+            sxkd_total = 0
+            qlda_total = 0
+            if not line['management_fee']:
+                sxkd_total = amount_total
+                worksheet.write(begin_row, 5, Cal.convert_dot(sxkd_total), format_border)
+                worksheet.write(begin_row, 6, 0, format_border)
+            else:
+                qlda_total = amount_total
+                worksheet.write(begin_row, 5, 0, format_border)
+                worksheet.write(begin_row, 6, Cal.convert_dot(qlda_total), format_border)
+            worksheet.write(begin_row, 7, '', format_border)
             
             stt += 1
             begin_row += 1
+
+            km_amount += km_total
+            sxkd_amount += sxkd_total
+            qlda_amount += qlda_total
         
-        worksheet.write(begin_row, 0, '', format1)
-        worksheet.merge_range(begin_row, 1, begin_row, 2, 'Tổng cộng: ', format1)
-        worksheet.write(begin_row, 3, '', format1)
-        worksheet.write(begin_row, 4, '', format1)
-        worksheet.write(begin_row, 5, '', format1)
-        worksheet.write(begin_row, 6, '', format1)
+        worksheet.merge_range(begin_row, 0, begin_row, 2, 'Tổng cộng: ', format_border)
+        worksheet.write(begin_row, 3, '', format_border)
+        worksheet.write(begin_row, 4, Cal.convert_dot(km_amount), format_border)
+        worksheet.write(begin_row, 5, Cal.convert_dot(sxkd_amount), format_border)
+        worksheet.write(begin_row, 6, Cal.convert_dot(qlda_amount), format_border)
+        worksheet.write(begin_row, 7, '', format_border)
 
         worksheet.merge_range(begin_row + 1, 0, begin_row + 1, 4, 'Biên bản kết thúc vào lúc ... giờ ... phút cùng ngày.', format_left_align)
 
@@ -1034,13 +1176,717 @@ def export_xlsx_form_1(request):
     else:
         return redirect('/vehicle/unexpected_error/')
 
+def export_xlsx_form_2(request):
+    if request.method == "GET" and request.user.pk:
+        date_from = request.GET['date_from']
+        date_to = request.GET['date_to']
+        vehicle_id = request.GET['vehicle_id']
+
+        data_list = []
+        if date_from and date_to:
+            _date_from = convertDate(date_from) + ' 00:00:00'
+            _date_to = convertDate(date_to) + ' 23:59:59'
+            data_list = get_stage_info(_date_from, _date_to, vehicle_id, 'diesel')
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = "attachment; filename=BienBanKiemTraChiSoKmXeCau.xlsx"
+        # Create a workbook and add a worksheet.
+        workbook = xlsxwriter.Workbook(response, {'in_memory': True})
+    
+        worksheet = workbook.add_worksheet()
+        format1 = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format1.set_align('center')
+        format1.set_align('vcenter')
+        format1.set_font('Times New Roman')
+
+        format_border = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1, 'border': 1})
+        format_border.set_align('center')
+        format_border.set_align('vcenter')
+        format_border.set_font('Times New Roman')
+
+        format_fs10 = workbook.add_format({'font_size': 11, 'align': 'center', 'text_wrap': 1})
+        format_fs10.set_align('center')
+        format_fs10.set_align('vcenter')
+        format_fs10.set_font('Times New Roman')
+
+        format_unl = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format_unl.set_align('center')
+        format_unl.set_align('vcenter')
+        format_unl.set_font('Times New Roman')
+        format_unl.set_underline()
+
+        format_itl = workbook.add_format({'font_size': 12, 'align': 'center', 'text_wrap': 1})
+        format_itl.set_align('center')
+        format_itl.set_align('vcenter')
+        format_itl.set_font('Times New Roman')
+        format_itl.set_italic()
+
+        format_left_align = workbook.add_format({'font_size': 12, 'align': 'left', 'text_wrap': 1})
+        format_left_align.set_font('Times New Roman')
+
+        worksheet.print_area('A1:H40')
+        worksheet.fit_to_pages(1, 0)
+        worksheet.set_landscape()
+        worksheet.set_paper(9)
+        worksheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+
+        worksheet.set_default_row(20)
+
+        # Set width column
+        worksheet.set_column('A:A', 5)
+
+        worksheet.set_column('B:P', 10)
+        
+        worksheet.merge_range('A1:C1', 'CÔNG TY ĐIỆN LỰC QUẢNG NAM', format_fs10)
+        worksheet.merge_range('D1:H1', 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', format1)
+
+        worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
+        worksheet.merge_range('D2:H2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
+
+        worksheet.merge_range('D4:H4', datetime.now().strftime('Quảng Nam, ngày %d tháng %m năm %Y'), format_itl)
+
+        worksheet.merge_range('A5:H5', 'BIÊN BẢN KIỂM TRA CHỐT CHỈ SỐ KM XE CẨU', format1)
+        worksheet.merge_range('A6:H6', 'Hôm nay, vào lúc ... giờ 00 phút ngày ... tháng ... năm 2022 chúng tôi gồm có :', format_left_align)
+        worksheet.merge_range('A7:C7', 'Ông:', format_left_align)
+        worksheet.merge_range('D7:H7', 'Chức vụ: Phó Chánh Văn Phòng', format_left_align)
+        worksheet.merge_range('A8:C8', 'Ông:', format_left_align)
+        worksheet.merge_range('D8:H8', 'Chức vụ: Lái xe', format_left_align)
+
+        worksheet.merge_range('A9:H9', 'Cùng kiểm tra chốt chỉ số km các phương tiện vận tải, cụ thể sau:', format_left_align)
+
+        worksheet.merge_range(10, 0, 11, 0, 'STT', format_border)
+        worksheet.merge_range(10, 1, 11, 1, 'Tên PTVT', format_border)
+        worksheet.merge_range(10, 2, 11, 2, 'Km đầu kỳ', format_border)
+        worksheet.merge_range(10, 3, 11, 3, 'Km cuối kỳ', format_border)
+        worksheet.merge_range(10, 4, 11, 4, 'Km phát sinh', format_border)
+        worksheet.merge_range(10, 5, 11, 5, 'Giờ cẩu', format_border)
+        worksheet.merge_range(10, 6, 11, 6, 'Ghi chú', format_border)
+
+        begin_row = 12
+        stt = 1
+
+        km_amount = 0
+        crane_amount = 0
+        for line in data_list:
+            worksheet.write(begin_row, 0, stt, format_border)
+            worksheet.write(begin_row, 1, line['number'], format_border)
+            worksheet.write(begin_row, 2, line['start_km'].replace(',00', '') if line['start_km'] else '', format_border)
+            worksheet.write(begin_row, 3, line['end_km'].replace(',00', '') if line['end_km'] else '', format_border)
+
+            km_total = 0
+            if line['start_km'] and line['end_km']:
+                start_km = float(line['start_km'].replace(',00', '').replace('.', ''))
+                end_km = float(line['end_km'].replace(',00', '').replace('.', ''))
+                if start_km < end_km:
+                    km_total = end_km - start_km
+
+            worksheet.write(begin_row, 4, Cal.convert_dot(km_total), format_border)
+
+            worksheet.write(begin_row, 5, line['crane_hour'], format_border)
+            worksheet.write(begin_row, 6, '', format_border)
+
+            km_amount += km_total
+            crane_amount += line['crane_hour']
+            
+            stt += 1
+            begin_row += 1
+        
+        worksheet.write(begin_row, 0, '', format_border)
+        worksheet.merge_range(begin_row, 1, begin_row, 2, 'Tổng cộng: ', format_border)
+        worksheet.write(begin_row, 3, '', format_border)
+        worksheet.write(begin_row, 4, km_amount, format_border)
+        worksheet.write(begin_row, 5, crane_amount, format_border)
+        worksheet.write(begin_row, 6, '', format_border)
+
+        worksheet.merge_range(begin_row + 1, 0, begin_row + 1, 4, 'Biên bản kết thúc vào lúc ... giờ ... phút cùng ngày.', format_left_align)
+
+        worksheet.merge_range(begin_row + 3, 0, begin_row + 3, 7, 'HỘI ĐỒNG KIỂM TRA', format1)
+        worksheet.merge_range(begin_row + 4, 0, begin_row + 4, 3, 'VĂN PHÒNG', format1)
+        worksheet.merge_range(begin_row + 4, 4, begin_row + 4, 7, 'NGƯỜI LẬP', format1)
+
+        workbook.close()
+        return response
+
+    else:
+        return redirect('/vehicle/unexpected_error/')
+
+def export_xlsx_form_3(request):
+    if request.method == "GET" and request.user.pk:
+        date_from = request.GET['date_from']
+        date_to = request.GET['date_to']
+        vehicle_id = request.GET['vehicle_id']
+
+        data_list = []
+        dmy_from = dmy_to = ''
+        if date_from and date_to:
+            dmy_from = (datetime.strptime(date_from, '%d-%m-%Y')).strftime('%d/%m/%Y')
+            dmy_to = (datetime.strptime(date_to, '%d-%m-%Y')).strftime('%d/%m/%Y')
+            _date_from = convertDate(date_from) + ' 00:00:00'
+            _date_to = convertDate(date_to) + ' 23:59:59'
+            data_list = get_fuel_settlement(_date_from, _date_to, vehicle_id)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = "attachment; filename=BangQuyetToanNhienLieu.xlsx"
+        # Create a workbook and add a worksheet.
+        workbook = xlsxwriter.Workbook(response, {'in_memory': True})
+    
+        worksheet = workbook.add_worksheet()
+        format1 = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format1.set_align('center')
+        format1.set_align('vcenter')
+        format1.set_font('Times New Roman')
+
+        format_border = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1, 'border': 1})
+        format_border.set_align('center')
+        format_border.set_align('vcenter')
+        format_border.set_font('Times New Roman')
+
+        format_fs10 = workbook.add_format({'font_size': 11, 'align': 'center', 'text_wrap': 1})
+        format_fs10.set_align('center')
+        format_fs10.set_align('vcenter')
+        format_fs10.set_font('Times New Roman')
+
+        format_unl = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format_unl.set_align('center')
+        format_unl.set_align('vcenter')
+        format_unl.set_font('Times New Roman')
+        format_unl.set_underline()
+
+        format_itl = workbook.add_format({'font_size': 12, 'align': 'center', 'text_wrap': 1})
+        format_itl.set_align('center')
+        format_itl.set_align('vcenter')
+        format_itl.set_font('Times New Roman')
+        format_itl.set_italic()
+
+        format_left_align = workbook.add_format({'font_size': 12, 'align': 'left', 'text_wrap': 1})
+        format_left_align.set_font('Times New Roman')
+
+        worksheet.print_area('A1:H40')
+        worksheet.fit_to_pages(1, 0)
+        worksheet.set_landscape()
+        worksheet.set_paper(9)
+        worksheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+
+        worksheet.set_default_row(20)
+
+        # Set width column
+        worksheet.set_column('A:A', 5)
+
+        worksheet.set_column('B:P', 10)
+        
+        worksheet.merge_range('A1:C1', 'CÔNG TY ĐIỆN LỰC QUẢNG NAM', format_fs10)
+        worksheet.merge_range('D1:L1', 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', format1)
+
+        worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
+        worksheet.merge_range('D2:L2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
+
+        worksheet.merge_range('D4:L4', datetime.now().strftime('Tam Kỳ, ngày %d tháng %m năm %Y'), format_itl)
+
+        worksheet.merge_range('A5:L5', 'BẢNG QUYẾT TOÁN NHIÊN LIỆU', format1)
+        worksheet.merge_range('A6:L6', 'Thời gian, từ ngày %s đến ngày %s' % (dmy_from, dmy_to), format_left_align)
+
+        worksheet.merge_range(6, 0, 7, 0, 'STT', format_border)
+        worksheet.merge_range(6, 1, 7, 1, 'Biển số xe', format_border)
+        worksheet.merge_range(6, 2, 7, 2, 'Nội dung', format_border)
+        worksheet.merge_range(6, 3, 7, 3, 'Tổng Km VH', format_border)
+        worksheet.merge_range(6, 4, 7, 4, 'Tổng Xăng 95', format_border)
+        worksheet.merge_range(6, 5, 7, 5, 'Tổng dầu Diezel', format_border)
+        worksheet.merge_range(6, 6, 6, 8, 'NL SXKD (lít)', format_border)
+
+        worksheet.write('G8', 'KmVH', format_border)
+        worksheet.write('H8', 'Xăng', format_border)
+        worksheet.write('I8', 'Diezel', format_border)
+
+        worksheet.merge_range(6, 9, 6, 11, 'Nhiên liệu BQL', format_border)
+
+        worksheet.write('J8', 'KmVH', format_border)
+        worksheet.write('K8', 'Xăng 95', format_border)
+        worksheet.write('L8', 'Dầu', format_border)
+
+        begin_row = 8
+        stt = 1
+        table_total_km = table_total_petrol = table_total_diezel = 0.0
+        table_nfm_total_km = table_nfm_total_petrol = table_nfm_total_diezel = 0.0
+        table_fm_total_km = table_fm_total_petrol = table_fm_total_diezel = 0.0
+
+        for line in data_list:
+            worksheet.write(begin_row, 0, stt, format_border)
+            worksheet.write(begin_row, 1, line['number'], format_border)
+            
+            worksheet.write(begin_row, 2, 'Phục vụ công tác SXKD', format_border)
+            
+            nfm_km_total = 0
+            if line['nfm_start_km'] and line['nfm_end_km']:
+                nfm_start_km = convert_number(line['nfm_start_km'])
+                nfm_end_km = convert_number(line['nfm_end_km'])
+                if nfm_start_km < nfm_end_km:
+                    nfm_km_total = nfm_end_km - nfm_start_km
+
+            worksheet.write(begin_row, 6, Cal.convert_dot(nfm_km_total), format_border)
+
+            nfm_liter_total = cal_liter_on_km(nfm_km_total, line['id'])
+
+            nfm_petrol_liter = 0.0
+            nfm_diezel_liter = 0.0
+            if line['nfm_fuel_type'] == 'Xăng':
+                nfm_petrol_liter = nfm_liter_total
+                worksheet.write(begin_row, 7, nfm_liter_total, format_border)
+                worksheet.write(begin_row, 8, 0, format_border)
+            else:
+                nfm_diezel_liter = nfm_liter_total
+                worksheet.write(begin_row, 7, 0, format_border)
+                worksheet.write(begin_row, 8, nfm_liter_total, format_border)
+
+            km_total = 0
+            if line['start_km'] and line['end_km']:
+                start_km = convert_number(line['start_km'])
+                end_km = convert_number(line['end_km'])
+                if start_km < end_km:
+                    km_total = end_km - start_km
+
+            worksheet.write(begin_row, 9, Cal.convert_dot(km_total), format_border)
+
+            liter_total = cal_liter_on_km(km_total, line['id'])
+
+            petrol_liter = 0.0
+            diezel_liter = 0.0
+            if line['fuel_type'] == 'Xăng':
+                petrol_liter = liter_total
+                worksheet.write(begin_row, 10, liter_total, format_border)
+                worksheet.write(begin_row, 11, 0, format_border)
+            else:
+                diezel_liter = liter_total
+                worksheet.write(begin_row, 10, 0, format_border)
+                worksheet.write(begin_row, 11, liter_total, format_border)
+
+            km_amount = nfm_km_total + km_total
+            petrol_amount = nfm_petrol_liter + petrol_liter
+            diezel_amount = nfm_diezel_liter + diezel_liter
+
+            worksheet.write(begin_row, 3, Cal.convert_dot(km_amount), format_border)
+            worksheet.write(begin_row, 4, petrol_amount, format_border)
+            worksheet.write(begin_row, 5, diezel_amount, format_border)
+
+            table_total_km += km_amount
+            table_total_petrol += petrol_amount
+            table_total_diezel += diezel_amount
+
+            table_nfm_total_km += nfm_km_total
+            table_nfm_total_petrol += nfm_petrol_liter
+            table_nfm_total_diezel += nfm_diezel_liter
+
+            table_fm_total_km += km_total
+            table_fm_total_petrol += petrol_liter
+            table_fm_total_diezel += diezel_liter
+
+            stt += 1
+            begin_row += 1
+        
+        worksheet.write(begin_row, 0, '', format_border)
+        worksheet.write(begin_row, 1, 'Tổng cộng: ', format_border)
+        worksheet.write(begin_row, 2, '', format_border)
+        worksheet.write(begin_row, 3, table_total_km, format_border)
+        worksheet.write(begin_row, 4, table_total_petrol, format_border)
+        worksheet.write(begin_row, 5, table_total_diezel, format_border)
+        worksheet.write(begin_row, 6, table_nfm_total_km, format_border)
+        worksheet.write(begin_row, 7, table_nfm_total_petrol, format_border)
+        worksheet.write(begin_row, 8, table_nfm_total_diezel, format_border)
+        worksheet.write(begin_row, 9, table_fm_total_km, format_border)
+        worksheet.write(begin_row, 10, table_fm_total_petrol, format_border)
+        worksheet.write(begin_row, 11, table_fm_total_diezel, format_border)
+
+        worksheet.merge_range(begin_row + 2, 0, begin_row + 2, 3, 'VĂN PHÒNG', format1)
+        worksheet.merge_range(begin_row + 2, 4, begin_row + 2, 7, 'NGƯỜI LẬP', format1)
+
+        workbook.close()
+        return response
+
+    else:
+        return redirect('/vehicle/unexpected_error/')
+
+def export_xlsx_form_4(request):
+    if request.method == "GET" and request.user.pk:
+        date_from = request.GET['date_from']
+        date_to = request.GET['date_to']
+        vehicle_id = request.GET['vehicle_id']
+
+        data_list = []
+        dmy_from = dmy_to = ''
+        if date_from and date_to:
+            dmy_from = (datetime.strptime(date_from, '%d-%m-%Y')).strftime('%d/%m/%Y')
+            dmy_to = (datetime.strptime(date_to, '%d-%m-%Y')).strftime('%d/%m/%Y')
+            _date_from = convertDate(date_from) + ' 00:00:00'
+            _date_to = convertDate(date_to) + ' 23:59:59'
+            data_list = get_crane_fuel_settlement(_date_from, _date_to, vehicle_id)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = "attachment; filename=BangQuyetToanNhienLieuXeCau.xlsx"
+        # Create a workbook and add a worksheet.
+        workbook = xlsxwriter.Workbook(response, {'in_memory': True})
+    
+        worksheet = workbook.add_worksheet()
+        format1 = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format1.set_align('center')
+        format1.set_align('vcenter')
+        format1.set_font('Times New Roman')
+
+        format_border = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1, 'border': 1})
+        format_border.set_align('center')
+        format_border.set_align('vcenter')
+        format_border.set_font('Times New Roman')
+
+        format_fs10 = workbook.add_format({'font_size': 11, 'align': 'center', 'text_wrap': 1})
+        format_fs10.set_align('center')
+        format_fs10.set_align('vcenter')
+        format_fs10.set_font('Times New Roman')
+
+        format_unl = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format_unl.set_align('center')
+        format_unl.set_align('vcenter')
+        format_unl.set_font('Times New Roman')
+        format_unl.set_underline()
+
+        format_itl = workbook.add_format({'font_size': 12, 'align': 'center', 'text_wrap': 1})
+        format_itl.set_align('center')
+        format_itl.set_align('vcenter')
+        format_itl.set_font('Times New Roman')
+        format_itl.set_italic()
+
+        format_left_align = workbook.add_format({'font_size': 12, 'align': 'left', 'text_wrap': 1})
+        format_left_align.set_font('Times New Roman')
+
+        worksheet.print_area('A1:H40')
+        worksheet.fit_to_pages(1, 0)
+        worksheet.set_landscape()
+        worksheet.set_paper(9)
+        worksheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+
+        worksheet.set_default_row(20)
+
+        # Set width column
+        worksheet.set_column('A:A', 5)
+
+        worksheet.set_column('B:P', 10)
+        
+        worksheet.merge_range('A1:C1', 'CÔNG TY ĐIỆN LỰC QUẢNG NAM', format_fs10)
+        worksheet.merge_range('D1:L1', 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', format1)
+
+        worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
+        worksheet.merge_range('D2:L2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
+
+        worksheet.merge_range('D4:L4', datetime.now().strftime('Quảng Nam, ngày %d tháng %m năm %Y'), format_itl)
+
+        worksheet.merge_range('A5:L5', 'BẢNG QUYẾT TOÁN NHIÊN LIỆU', format1)
+        worksheet.merge_range('A6:L6', 'Thời gian, từ ngày %s đến ngày %s' % (dmy_from, dmy_to), format_left_align)
+
+        worksheet.merge_range(6, 0, 7, 0, 'STT', format_border)
+        worksheet.merge_range(6, 1, 7, 1, 'Biển số xe', format_border)
+        worksheet.merge_range(6, 2, 7, 2, 'Nội dung', format_border)
+        worksheet.merge_range(6, 3, 7, 3, 'Tổng Km VH', format_border)
+        worksheet.merge_range(6, 4, 7, 4, 'Giờ cẩu', format_border)
+        worksheet.merge_range(6, 5, 7, 5, 'Giờ nổ máy', format_border)
+        worksheet.merge_range(6, 6, 6, 8, 'Nhiên liệu', format_border)
+
+        worksheet.write('G8', 'Diesel(lít)', format_border)
+        worksheet.write('H8', 'TT Phục vụ SXKD', format_border)
+        worksheet.write('I8', 'Phục vụ ĐTXD', format_border)
+
+        worksheet.merge_range(6, 9, 7, 9, 'Ghi chú', format_border)
+
+        begin_row = 8
+        stt = 1
+        table_total_km = table_total_crane = table_total_generator_firing = 0.0
+        table_total_diesel = table_total_sxkd = table_total_dtxd = 0.0
+
+        for line in data_list:
+            worksheet.write(begin_row, 0, stt, format_border)
+            worksheet.write(begin_row, 1, line['number'], format_border)
+            
+            worksheet.write(begin_row, 2, 'Phục vụ công tác SXKD', format_border)
+            
+            km_total = 0
+            if line['start_km'] and line['end_km']:
+                start_km = convert_number(line['start_km'])
+                end_km = convert_number(line['end_km'])
+                if start_km < end_km:
+                    km_total = end_km - start_km
+
+            worksheet.write(begin_row, 3, km_total, format_border)
+            worksheet.write(begin_row, 4, line['crane_hour'], format_border)
+            worksheet.write(begin_row, 5, line['generator_firing_hour'], format_border)
+
+            sxkd_km_total = 0
+            if line['sxkd_start_km'] and line['sxkd_end_km']:
+                sxkd_start_km = convert_number(line['sxkd_start_km'])
+                sxkd_end_km = convert_number(line['sxkd_end_km'])
+                if sxkd_start_km < sxkd_end_km:
+                    sxkd_km_total = sxkd_end_km - sxkd_start_km
+
+            sxkd_petrol_liter = cal_liter_on_km(sxkd_km_total, line['id'])
+            sxkd_crane_liter = Cal.crane_liter(line['sxkd_crane_hour'], line['id'], 'crane')
+            sxkd_generator_firing_liter = Cal.crane_liter(line['sxkd_generator_firing_hour'], line['id'], 'no crane')
+
+            sxkd_liter_total = sxkd_petrol_liter + sxkd_crane_liter + sxkd_generator_firing_liter
+
+            worksheet.write(begin_row, 7, sxkd_liter_total, format_border)
+
+            dtxd_km_total = 0
+            if line['dtxd_start_km'] and line['dtxd_end_km']:
+                dtxd_start_km = convert_number(line['dtxd_start_km'])
+                dtxd_end_km = convert_number(line['dtxd_end_km'])
+                if dtxd_start_km < dtxd_end_km:
+                    dtxd_km_total = dtxd_end_km - dtxd_start_km
+
+            dtxd_petrol_liter = cal_liter_on_km(dtxd_km_total, line['id'])
+            dtxd_crane_liter = Cal.crane_liter(line['dtxd_crane_hour'], line['id'], 'crane')
+            dtxd_generator_firing_liter = Cal.crane_liter(line['dtxd_generator_firing_hour'], line['id'], 'no crane')
+
+            dtxd_liter_total = dtxd_petrol_liter + dtxd_crane_liter + dtxd_generator_firing_liter
+
+            worksheet.write(begin_row, 8, dtxd_liter_total, format_border)
+            worksheet.write(begin_row, 9, '', format_border)
+
+            diesel_liter_total = sxkd_liter_total + dtxd_liter_total
+
+            worksheet.write(begin_row, 6, diesel_liter_total, format_border)
+
+            table_total_km += km_total
+            table_total_crane += line['crane_hour']
+            table_total_generator_firing += table_total_generator_firing
+
+            table_total_diesel += diesel_liter_total
+            table_total_sxkd += sxkd_liter_total
+            table_total_dtxd += dtxd_liter_total
+
+            stt += 1
+            begin_row += 1
+        
+        worksheet.merge_range(begin_row, 0, begin_row, 2, 'Tổng cộng: ', format_border)
+        worksheet.write(begin_row, 3, table_total_km, format_border)
+        worksheet.write(begin_row, 4, table_total_crane, format_border)
+        worksheet.write(begin_row, 5, table_total_generator_firing, format_border)
+        worksheet.write(begin_row, 6, table_total_diesel, format_border)
+        worksheet.write(begin_row, 7, table_total_sxkd, format_border)
+        worksheet.write(begin_row, 8, table_total_dtxd, format_border)
+        worksheet.write(begin_row, 9, '', format_border)
+
+        worksheet.merge_range(begin_row + 2, 0, begin_row + 2, 3, 'VĂN PHÒNG', format1)
+        worksheet.merge_range(begin_row + 2, 4, begin_row + 2, 7, 'NGƯỜI LẬP', format1)
+
+        workbook.close()
+        return response
+
+    else:
+        return redirect('/vehicle/unexpected_error/')
+
+def export_xlsx_form_5(request):
+    if request.method == "GET" and request.user.pk:
+        date_from = request.GET['date_from']
+        date_to = request.GET['date_to']
+        vehicle_id = request.GET['vehicle_id']
+
+        data_list = []
+        vehicle_list = []
+        dmy_from = dmy_to = ''
+        if date_from and date_to:
+            dmy_from = (datetime.strptime(date_from, '%d-%m-%Y')).strftime('%d/%m/%Y')
+            dmy_to = (datetime.strptime(date_to, '%d-%m-%Y')).strftime('%d/%m/%Y')
+            _date_from = convertDate(date_from) + ' 00:00:00'
+            _date_to = convertDate(date_to) + ' 23:59:59'
+            data_list = get_bqlda_fuel_settlement(_date_from, _date_to, vehicle_id)
+
+            # get info of 2 keys (vehicle, count) in list
+            vehicle_group = [line['number'] for line in data_list if line['number']]
+            vehicle_list = list(dict.fromkeys(vehicle_group))
+            vehicle_dict = [{'vehicle': line} for line in vehicle_list]
+            vehicle_count = Counter(vehicle_group)
+            vehicle_item = [line.update({'count': vehicle_count[line['vehicle']]}) for line in vehicle_dict]
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = "attachment; filename=BangQuyetToanNhienLieuXeCau.xlsx"
+        # Create a workbook and add a worksheet.
+        workbook = xlsxwriter.Workbook(response, {'in_memory': True})
+    
+        worksheet = workbook.add_worksheet()
+        format1 = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format1.set_align('center')
+        format1.set_align('vcenter')
+        format1.set_font('Times New Roman')
+
+        format_border = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1, 'border': 1})
+        format_border.set_align('center')
+        format_border.set_align('vcenter')
+        format_border.set_font('Times New Roman')
+
+        format_fs10 = workbook.add_format({'font_size': 11, 'align': 'center', 'text_wrap': 1})
+        format_fs10.set_align('center')
+        format_fs10.set_align('vcenter')
+        format_fs10.set_font('Times New Roman')
+
+        format_unl = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1})
+        format_unl.set_align('center')
+        format_unl.set_align('vcenter')
+        format_unl.set_font('Times New Roman')
+        format_unl.set_underline()
+
+        format_itl = workbook.add_format({'font_size': 12, 'align': 'center', 'text_wrap': 1})
+        format_itl.set_align('center')
+        format_itl.set_align('vcenter')
+        format_itl.set_font('Times New Roman')
+        format_itl.set_italic()
+
+        format_title = workbook.add_format({'font_size': 12, 'align': 'center', 'bold': True, 'text_wrap': 1, 'border': 1})
+        format_title.set_align('center')
+        format_title.set_align('vcenter')
+        format_title.set_font('Times New Roman')
+        format_title.set_bg_color('#FAEBD7')
+
+        format_left_align = workbook.add_format({'font_size': 12, 'align': 'left', 'text_wrap': 1})
+        format_left_align.set_font('Times New Roman')
+
+        worksheet.print_area('A1:H40')
+        worksheet.fit_to_pages(1, 0)
+        worksheet.set_landscape()
+        worksheet.set_paper(9)
+        worksheet.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+
+        worksheet.set_default_row(20)
+
+        # Set width column
+        worksheet.set_column('A:A', 5)
+
+        worksheet.set_column('B:P', 10)
+        
+        worksheet.merge_range('A1:C1', 'CÔNG TY ĐIỆN LỰC QUẢNG NAM', format_fs10)
+        worksheet.merge_range('D1:L1', 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', format1)
+
+        worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
+        worksheet.merge_range('D2:L2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
+
+        worksheet.merge_range('D4:L4', datetime.now().strftime('Quảng Nam, ngày %d tháng %m năm %Y'), format_itl)
+
+        worksheet.merge_range('A5:L5', 'BẢNG QUYẾT TOÁN NHIÊN LIỆU BQLDA', format1)
+        worksheet.merge_range('A6:L6', 'Thời gian, từ ngày %s đến ngày %s' % (dmy_from, dmy_to), format_left_align)
+
+        worksheet.write(6, 0, 'STT', format_border)
+        worksheet.write(6, 1, 'Biển số xe', format_border)
+        worksheet.write(6, 2, 'Địa điểm', format_border)
+        worksheet.write(6, 3, 'Nội dung công việc', format_border)
+        worksheet.write(6, 4, 'Km VH', format_border)
+        worksheet.write(6, 5, 'ĐVT', format_border)
+        worksheet.write(6, 6, 'SL', format_border)
+
+        worksheet.write(6, 7, 'Đơn giá', format_border)
+        worksheet.write(6, 8, 'Thành tiền', format_border)
+        worksheet.write(6, 9, 'Ghi chú', format_border)
+
+        begin_row = 7
+        arr_seq = []
+        stt = 1
+
+        table_total_km = table_total_qty = table_total_amount = 0.0
+
+        for index, item in enumerate(vehicle_dict):
+
+            worksheet.merge_range(begin_row, 0, begin_row + item['count'], 0, stt, format_border)
+            worksheet.merge_range(begin_row, 1, begin_row + item['count'], 1, item['vehicle'], format_border)
+
+            arr_seq.append(begin_row)
+
+            row_count = arr_seq[index]
+            lines_total_km = lines_total_qty = lines_total_amount = 0
+            
+            header_row = begin_row
+
+            for line in data_list:
+                if item['vehicle'] == line['number']:
+                    worksheet.write(row_count + 1, 2, line['destination'], format_border)
+                    worksheet.write(row_count + 1, 3, line['content'], format_border)
+                    
+                    km_total = 0
+                    if line['start_km'] and line['end_km']:
+                        start_km = convert_number(line['start_km'])
+                        end_km = convert_number(line['end_km'])
+                        if start_km < end_km:
+                            km_total = end_km - start_km
+
+                    worksheet.write(row_count + 1, 4, Cal.convert_dot(km_total), format_border)
+                    worksheet.write(row_count + 1, 5, '', format_border)
+
+                    petrol_liter = cal_liter_on_km(km_total, line['id'])
+                    crane_liter = Cal.crane_liter(line['crane_hour'], line['id'], 'crane')
+                    generator_firing_liter = Cal.crane_liter(line['generator_firing_hour'], line['id'], 'no crane')
+
+                    liter_total = petrol_liter + crane_liter + generator_firing_liter
+
+                    worksheet.write(row_count + 1, 6, Cal.convert_dot(liter_total), format_border)
+
+                    worksheet.write(row_count + 1, 7, Cal.convert_dot(line['price']), format_border)
+
+                    amount_total = 0
+                    if line['price']:
+                        amount_total = liter_total * line['price']
+
+                    worksheet.write(row_count + 1, 8, Cal.convert_dot(amount_total), format_border)
+
+                    worksheet.write(row_count + 1, 9, line['note'] if line['note'] != 'None' else '', format_border)
+
+                    lines_total_km += km_total
+                    lines_total_qty += liter_total
+                    lines_total_amount += amount_total
+
+                    row_count += 1
+            
+            worksheet.write(header_row, 2, '', format_title)
+            worksheet.write(header_row, 3, 'Phục vụ BQLDA', format_title)
+            worksheet.write(header_row, 4, Cal.convert_dot(lines_total_km), format_title)
+            worksheet.write(header_row, 5, 'Lít', format_title)
+            worksheet.write(header_row, 6, Cal.convert_dot(lines_total_qty), format_title)
+            worksheet.write(header_row, 7, '', format_title)
+            worksheet.write(header_row, 8, Cal.convert_dot(lines_total_amount), format_title)
+            worksheet.write(header_row, 9, '', format_title)
+
+            table_total_km += lines_total_km
+            table_total_amount += lines_total_amount
+
+            stt += 1
+            begin_row = begin_row + item['count'] + 1
+        
+        worksheet.write(begin_row, 0,'', format_title)
+        worksheet.write(begin_row, 1,'Tổng cộng: ', format_title)
+        worksheet.write(begin_row, 2,'', format_title)
+        worksheet.write(begin_row, 3, '', format_title)
+        worksheet.write(begin_row, 4, Cal.convert_dot(table_total_km), format_title)
+        worksheet.write(begin_row, 5, '', format_title)
+        worksheet.write(begin_row, 6, '', format_title)
+        worksheet.write(begin_row, 7, '', format_title)
+        worksheet.write(begin_row, 8, Cal.convert_dot(table_total_amount), format_title)
+        worksheet.write(begin_row, 9, '', format_title)
+
+        worksheet.write(begin_row + 1, 2, 'Bằng chữ:', format1)
+        
+        n2w_string = ''
+        if table_total_amount > 0:
+            n2w_string = n2w(str(round(table_total_amount))).capitalize()
+            n2w_string = n2w_string + ' đồng.'
+        worksheet.merge_range(begin_row + 1, 3, begin_row + 1, 9, n2w_string, format1)
+
+        worksheet.merge_range(begin_row + 2, 0, begin_row + 2, 3, 'VĂN PHÒNG', format1)
+        worksheet.merge_range(begin_row + 2, 4, begin_row + 2, 7, 'NGƯỜI LẬP', format1)
+
+        workbook.close()
+        return response
+
+    else:
+        return redirect('/vehicle/unexpected_error/')
 
 class VehicleWorkingStageView(View):
     def get(self, request):
         try:
             calendar_id = request.GET['cid']
-            
-            calendar = VehicleWorkingStage.objects.filter(calender=calendar_id).first()
+            vehicle_id = request.GET['vid']
+
+            calendar = VehicleWorkingStage.objects.filter(calender=calendar_id, vehicle=vehicle_id).first()
             
             vehicle_calender = ModelVehicleCalender.objects.get(id=calendar_id)
             vehicle_type = vehicle_calender.vehicle_type
@@ -1061,7 +1907,9 @@ class VehicleWorkingStageView(View):
                 form = VehicleWorkingStageForm(instance=calendar)   
                 disabled_confirm_btn = _check_validate(calendar, is_crane)      
             else:
-                form = VehicleWorkingStageForm()
+                form = VehicleWorkingStageForm(initial={
+                    'vehicle': vehicle_id
+                })
             
             if request.user.is_active and request.user.is_superuser:
                 has_perm_work_perform = True
@@ -1071,10 +1919,12 @@ class VehicleWorkingStageView(View):
             context = {
                 'form': form, 
                 'cid': calendar_id, 
+                'vid': vehicle_id,
                 'is_crane': is_crane,
                 'disabled_save_btn': disabled_save_btn,
                 'disabled_confirm_btn': disabled_confirm_btn,
-                'has_perm_work_perform': has_perm_work_perform
+                'has_perm_work_perform': has_perm_work_perform,
+                'confirm_statuses': [status[0] for status in VehicleWorkingStage.STATUS if status[0] != 'NEW']
             }
             return render(request, "vehicle/vehicle_stage_modal_view.html", context)
         except Exception as exc:
@@ -1086,8 +1936,9 @@ class VehicleWorkingStageView(View):
         try:
             user_id = request.user
             calendar_id = request.GET['cid']
+            vehicle_id = request.GET['vid']
             calendar_record = ModelVehicleCalender.objects.get(id=calendar_id)
-            calendar = VehicleWorkingStage.objects.filter(calender=calendar_id).first()
+            calendar = VehicleWorkingStage.objects.filter(calender=calendar_id, vehicle=vehicle_id).first()
             
             if request.method == 'POST':
                 if calendar:
@@ -1117,6 +1968,7 @@ class VehicleWorkingStageView(View):
                         post = form.save(commit=False)
                         post.write_uid = user_id
                         post.write_date = datetime.now()
+                        post.fuel_type = self.get_fuel_type(calendar_id)
                         post.save()
                 else:
                     form = VehicleWorkingStageForm(request.POST, request.FILES)
@@ -1124,6 +1976,7 @@ class VehicleWorkingStageView(View):
                     post.create_uid = user_id
                     post.create_date = datetime.now()
                     post.calender = calendar_record
+                    post.fuel_type = self.get_fuel_type(calendar_id)
                     post.save()
 
             return redirect(request.environ['HTTP_REFERER'])
@@ -1131,6 +1984,15 @@ class VehicleWorkingStageView(View):
             print(exc)
             LoggingFile(exc)
             return HttpResponse("false")
+
+    def get_fuel_type(self, cid):
+        divided_vehicle = Vehicle_Division.objects.filter(calender=cid).first()
+        if divided_vehicle:
+            if divided_vehicle.vehicle:
+                if divided_vehicle.vehicle.vehicle_type:
+                    fuel_type = divided_vehicle.vehicle.fuel_type
+                    return fuel_type
+        return None
 
 
 def _check_validate(record, is_crane):

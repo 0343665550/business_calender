@@ -1,7 +1,7 @@
 <div class="modal face" id="modalVehicleStage" data-backdrop="false" data-background="false">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form class="frm_working_division" enctype="multipart/form-data" method="post" action="/vehicle/vehicle_stage/?cid={{cid}}">
+            <form class="frm_working_division" enctype="multipart/form-data" method="post" action="/vehicle/vehicle_stage/?cid={{cid}}&vid={{vid}}">
                 {% csrf_token %}
                 <!-- Modal Header -->
                 <div class="modal-header">
@@ -32,16 +32,34 @@
                                 {% endfor %}
                             </div>
                             {% endif %}
+
+                            <div class="form-group col-md-12">
+                                {{ form.vehicle.label_tag }}
+                                {{ form.vehicle.errors }}
+                                {{ form.vehicle }}
+                            </div>
+
                             <div class="form-group col-md-6">
                                 {{ form.start_km.label_tag }}
                                 {{ form.start_km.errors }}
                                 {{ form.start_km }}
                             </div>
-                            <div class="form-group col-md-6">
-                                {{ form.end_km.label_tag }}
-                                {{ form.end_km.errors }}
-                                {{ form.end_km }}
+
+                            <div class="form-group col-md-6 img">
+                                <label for="formGroupExampleInput">Hình ảnh odo bắt đầu</label>
+                                {{form.start_odo_image}}
+                                {% if form.start_odo_image %}
+                                    <img src="{{ form.start_odo_image.url }}" class="img-fluid"/>
+                                {% endif %}
                             </div>
+
+                            <input type="button" 
+                                value="Lưu bắt đầu" 
+                                class="default btn_stage_validate"
+                                {% if disabled_save_btn %}
+                                    disabled
+                                {% endif %}/>
+                            
                         </div>
                         {% if is_crane %}
                             <div class="form-row">
@@ -59,13 +77,12 @@
                         {% endif %}
                         <div class="form-row">
                             
-                            <div class="form-group col-md-6 img">
-                                <label for="formGroupExampleInput">Hình ảnh odo bắt đầu</label>
-                                {{form.start_odo_image}}
-                                {% if form.start_odo_image %}
-                                    <img src="{{ form.start_odo_image.url }}" class="img-fluid"/>
-                                {% endif %}
+                            <div class="form-group col-md-6">
+                                {{ form.end_km.label_tag }}
+                                {{ form.end_km.errors }}
+                                {{ form.end_km }}
                             </div>
+                            
                             <div class="form-group col-md-6 img">
                                 <label for="formGroupExampleInput">Hình ảnh odo kết thúc</label>
                                 {{form.end_odo_image}}
@@ -73,45 +90,48 @@
                                     <img src="{{ form.end_odo_image.url }}" class="img-fluid"/>
                                 {% endif %}
                             </div>
+
+                            <input type="button" 
+                                value="Lưu kết thúc" 
+                                class="default btn_stage_validate"
+                                {% if disabled_save_btn %}
+                                    disabled
+                                {% endif %}/>
                         </div>
                     </div>
                 </div>
             
                 <!-- Modal footer -->
                 <div class="modal-footer">
-                    <input type="button" 
-                        value="Lưu lại" 
-                        class="default btn_stage_validate"
-                        {% if disabled_save_btn %}
-                            disabled
-                        {% endif %}/>
-
                     <input type="submit" 
-                        value="Lưu lại" 
+                        value="Save" 
                         class="default btn_stage_save"
                         style="display: none;">
 
                     {% if has_perm_work_perform %}
-                        <button type="button" 
-                            class="btn btn-primary btn-sm btn_stage_confirm" 
-                            data-id={{ form.initial.id }} 
-                            data-status={{ form.initial.status }}
-                            {% if form.initial.status != 'NEW' or not disabled_confirm_btn %}
-                                disabled
-                            {% endif %}
-                            >
-                            <i class="fa fa-floppy-o" aria-hidden="true"></i> Xác nhận
-                        </button>
-
-                        <button type="button" 
-                            class="btn btn-secondary btn-sm btn_stage_cancel" 
-                            data-id={{ form.initial.id }} 
-                            data-status={{ form.initial.status }}
-                            {% if form.initial.status == 'NEW' %}
-                                disabled
-                            {% endif %}> 
-                                Huỷ xác nhận
-                        </button>
+                        {% if form.initial.status == 'NEW' %}
+                            <button type="button" 
+                                class="btn btn-primary btn-sm btn_stage_confirm" 
+                                data-id={{ form.initial.id }} 
+                                data-status={{ form.initial.status }}
+                                {% if form.initial.status != 'NEW' or not disabled_confirm_btn %}
+                                    disabled
+                                {% endif %}
+                                >
+                                <i class="fa fa-floppy-o" aria-hidden="true"></i> Xác nhận
+                            </button>
+                        {% endif %}
+                        {% if form.initial.status in confirm_statuses %}
+                            <button type="button" 
+                                class="btn btn-secondary btn-sm btn_stage_cancel" 
+                                data-id={{ form.initial.id }} 
+                                data-status={{ form.initial.status }}
+                                {% if form.initial.status == 'NEW' %}
+                                    disabled
+                                {% endif %}> 
+                                    Huỷ xác nhận
+                            </button>
+                        {% endif %}
                     {% endif %}
 
                     <button type="button" class="btn btn-danger btn-sm" data-dismiss="modal"><i class="fa fa-times-circle" aria-hidden="true"></i> Hủy</button>
@@ -134,7 +154,9 @@
         $(".btn_stage_validate").on('click', function () {
             var start_km = $('#id_start_km').val();
             var end_km = $('#id_end_km').val();
+
             var fileInput = document.getElementById('id_start_odo_image');
+            var fileInput2 = document.getElementById('id_end_odo_image');
             
             if (!start_km) {
                 return Swal.fire(
@@ -146,20 +168,39 @@
             else if (fileInput.files.length == 0 && $("#start_odo_image-clear_id").length == 0) {
                 return Swal.fire(
                     'Cảnh báo!',
-                    'Vui lòng chọn ảnh!',
+                    'Vui lòng chọn ảnh odo bắt đầu!',
                     'warning'
                 )
             } else {
                 // Adding here
                 if (start_km && end_km) {
-                    if (parseFloat(start_km) > parseFloat(end_km)) {
+                    if (parseFloat(start_km) >= parseFloat(end_km)) {
                         return Swal.fire(
                             'Cảnh báo!',
                             'Số km bắt đầu không thể lớn hơn số km kết thúc!',
                             'warning'
                         )
                     }
+                }
+                if (end_km && fileInput2.files.length == 0 && $("#end_odo_image-clear_id").length == 0) {
+                    return Swal.fire(
+                        'Cảnh báo!',
+                        'Vui lòng chọn ảnh odo kết thúc!',
+                        'warning'
+                    )
                 } 
+                if (!$('#id_vehicle').val()) {
+                    return Swal.fire(
+                        'Cảnh báo!',
+                        'Vui lòng chọn xe!',
+                        'warning'
+                    )
+                }
+                Swal.fire(
+                    'Thông báo!',
+                    'Cập nhật ảnh odoo thành công!',
+                    'success'
+                );
                 $(".btn_stage_save").click();
             }
         });
@@ -170,9 +211,14 @@
             var status = $(this).attr("data-status");
             console.log(stage_id, status);
 
+            var status_title = 'Huỷ xác nhận';
+            if (status == 'NEW') {
+                status_title = 'Xác nhận'
+            }
+
             Swal.fire({
                 title: 'Bạn có chắc?',
-                text: "Xác nhận giai đoạn công tác này!",
+                text: status_title + " giai đoạn công tác này!",
                 type: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#3085d6',
@@ -199,13 +245,14 @@
                                 location.reload();
                             } else if (resp == "cancel") {
                                 Swal.fire(
-                                    'Sorry!',
-                                    'Bạn đã  huỷ xác nhận thành công!',
+                                    'Thông báo!',
+                                    'Bạn đã huỷ xác nhận thành công!',
                                     'warning'
                                 )
+                                location.reload();
                             } else if (resp == "no_perm") {
                                 Swal.fire(
-                                    'Sorry!',
+                                    'Cảnh báo!',
                                     'Bạn không có quyền xác nhận!',
                                     'warning'
                                 )
@@ -217,7 +264,7 @@
                                 )
                             } else {
                                 Swal.fire(
-                                    'Sorry!',
+                                    'Cảnh báo!',
                                     'Bạn đã xác nhận không thành công!',
                                     'warning'
                                 )

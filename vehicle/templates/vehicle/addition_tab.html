@@ -1,4 +1,5 @@
 {% load static %}
+{% load string_filter %}
 <div class="tab-pane fade show {% if tab_active == 'right' %} active {% endif %}" id="nav-right" role="tabpanel" aria-labelledby="nav-right-tab" style="font-size: 90%;">
     <div class="row">
         <div class="col-md-4">
@@ -85,18 +86,18 @@
                             </h5>
                         </div>
                         <div id={{i.date}} class="collapse show" aria-labelledby="headingOne" data-parent="#accordion">
-                            <div class="card-body" style="padding:0;">
+                            <div class="card-body table-responsive" style="padding:0;">
                             {% if i.count > 0 %}
-                                <table class="style4">
+                                <table class="table style4">
                                     <tbody>
                                         <tr class="headlcn">
                                             <td class="SubHead15" style="text-align: center;" width="9%">
                                                 Đơn vị đăng ký</td>
                                             <td class="SubHead15" style="text-align: center;" width="11%">
-                                                Người thực hiện PTVT
+                                                Tên phương tiện
                                             </td>
                                             <td class="SubHead15" style="text-align: center;" width="11%">
-                                                Tên phương tiện
+                                                Người thực hiện PTVT
                                             </td>
                                             <td class="SubHead15" style="text-align: center;" width="12%">
                                                 Thời gian đi - đến
@@ -118,19 +119,34 @@
                                         </tr>
                                         {% for j in calender_list_right %}
                                             {% if i.date == j.date %}
-                                                <tr class="{% if j.status == 'ASSIGNED' %}table-success{% endif %}">
+                                                {% if j.all_confirmed %}
+                                                    <tr style="background-color: #f5f4d7;">
+                                                {% elif j.status == 'ASSIGNED' %}
+                                                    <tr class="table-success">
+                                                {% else %}
+                                                    <tr >
+                                                {% endif %}
                                                     <td width="9%">
                                                         <span>{{ j.register_unit_name }}</span>
                                                     </td>
                                                     <td width="11%">
-                                                        {% for user in j.drivers %}
-                                                            <div><span>{{ user.dep_name }} - {{ user.last_name|default:user.username}}</span></div>
-                                                        {% endfor %}
-                                                    </td>
-                                                    <td width="11%">
                                                         {% for item in j.vehicles %}
                                                             {% comment %} <div><span>{{ item.dep_name }} - {{ item.name }}</span></div> {% endcomment %}
-                                                            <div><span>{{ item.name }} ({{ item.number }})</span></div>
+                                                            <div>
+                                                                <span>{{ item.name }} ({{ item.number }})</span>
+                                                                
+                                                                {% if j.view_btn_work_perform %}
+                                                                    <a data-toggle="modal" data-target="#modalVehicleStage" data-id="{{ j.id }}" data-vehicle-id="{{ item.vehicle_id }}" title="Thực hiện công tác" class="vehicle_stage" href="#AssignMeeting">
+                                                                        <i class="fa fa-truck fa-lg" aria-hidden="true" style="font-size: x-large;"></i> 
+                                                                    </a>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endfor %}
+                                                        
+                                                    </td>
+                                                    <td width="11%">
+                                                        {% for user in j.drivers %}
+                                                            <div><span>{{ user.dep_name }} - {{ user.last_name|default:user.username}}</span></div>
                                                         {% endfor %}
                                                     </td>
                                                     <td style="text-align: center;" width="12%">
@@ -177,17 +193,17 @@
                                                         <span></span>
                                                         {% endif %}
                                                     </td>
-                                                    <td width="12%"> {{ j.note }} </td>
+                                                    <td width="12%">  
+                                                        <b>{{ j.note }} </b>
+                                                        {% for user in j.division_list %}
+                                                            <div>{{ user.last_name|replace_string }}</div>
+                                                        {% endfor %}
+                                                    </td>
                                                     <td width="7%">
                                                         <div class="form-group" style="float:right;">
                                                             <a href="/vehicle/vehiclecalender/{{ j.id }}" title="Chi tiết lịch xe">
                                                                 <i class="fa fa-pencil-square-o fa-lg" aria-hidden="true"></i>
                                                             </a>
-                                                            {% if j.view_btn_work_perform %}
-                                                                <a data-toggle="modal" data-target="#modalVehicleStage" data-id="{{ j.id }}" title="Thực hiện công tác" class="vehicle_stage" href="#AssignMeeting">
-                                                                    <i class="fa fa-file-image-o fa-lg" aria-hidden="true" style="font-size: large;"></i> 
-                                                                </a>
-                                                            {% endif %}
                                                             
                                                             {% if j.status == "NEW" and has_perm_confirm %}
                                                                 <button class="badge badge-primary btn_confirm" data-id={{j.id}} data-status={{j.status}}><span style="font-size:8px;">Xác nhận</span></button>

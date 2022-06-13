@@ -252,18 +252,25 @@
         var containerModalVehicleStage = $("#containerModalVehicleStage");
         $(".vehicle_stage").on('click', function () {
             var calenderId = $(this).attr("data-id");
+            var vehicleId = $(this).attr("data-vehicle-id");
             // alert("opened: "+ calenderId);
             $.ajax({
-                url: "/vehicle/vehicle_stage/?cid=" + calenderId,
+                url: "/vehicle/vehicle_stage/?cid=" + calenderId + '&vid=' + vehicleId,
                 type: "GET",
                 headers: {'X-CSRFToken': '{{ csrf_token }}'},
                 success: function (resp) {
                     containerModalVehicleStage.html(resp);
                     $("#modalVehicleStage").modal();
+                    // Autofill when modal appear
+                    // if (!$("#id_vehicle").val() && vehicleId) {
+                    //    $("#id_vehicle").val(vehicleId);
+                    // }
+                    // Disable field 
+                    // $("#id_vehicle").attr('disabled', 'disabled');
                 },
                 error: function(xhr, status, error){
                     var errorMessage = xhr.status + ': ' + xhr.statusText
-                    alert('Sorry - ' + errorMessage);
+                    alert(errorMessage + error);
                 }
             });
         });

@@ -12,6 +12,7 @@ from django.contrib.admin.widgets import FilteredSelectMultiple
 from .forms import AddressRadio, UploadMultiple
 import requests
 from  django import forms
+from vehicle.utils import get_user_management_depart
 # from django.db.models import F
 
 # Register your models here.
@@ -248,6 +249,10 @@ class CalenderAdmin(admin.ModelAdmin):
         else:
             return True
     
+    def get_form(self, request, obj=None, **kwargs):
+        form = super(CalenderAdmin, self).get_form(request, obj=None, **kwargs)
+        form.base_fields['management_fee'].initial = get_user_management_depart(request.user.id)
+        return form
 
 # class DepartmentAdmin(admin.ModelAdmin):
 #     inlines = (JoinComponentInline, PrepareUnitInline)
