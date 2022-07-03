@@ -15,9 +15,14 @@ from django.contrib.auth.models import User, Group
 from vehicle.models import *
 from django.core.files.storage import FileSystemStorage
 from django.conf import settings
-from .utils import cal_fee_on_km, get_user_management_depart, convert_number, cal_liter_on_km, Calculation as Cal
+from .utils import cal_fee_on_km, get_user_management_depart, convert_number, cal_liter_on_km, Calculation as Cal, find_fuel_price
 from collections import Counter
 from vietnam_number import n2w
+# import locale
+
+# locale.setlocale(locale.LC_CTYPE, '')
+
+DATE_TIME = datetime.now().strftime('ngày %d tháng %m năm %Y'.encode('unicode-escape').decode()).encode().decode("unicode-escape")
 
 # Create your views here.
 
@@ -536,7 +541,7 @@ def export_xlsx(request):
         state = request.GET['status']
         tab_active = request.GET['tab_active']
         arr_date = datetime.now().strftime('%d-%m-%Y').split("-")
-        # print(date)
+        #                          e)
         data = excel_data(date, depart_id, tab_active, state)
         # print('data: ', data)
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -791,17 +796,21 @@ def get_stage_info(date_from, date_to, vehicle_id, fuel_type='petrol'):
     try:
         sql = """
                 SELECT v.id, v.number, vc.content, FORMAT(vws.start_km, 'N', 'vi-VN') AS start_km, FORMAT(vws.end_km, 'N', 'vi-VN') AS end_km, 
-            CONVERT(VARCHAR(10), vws.create_date, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour, vc.management_fee
+            CONVERT(VARCHAR(10), VC.START_TIME, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour, vc.management_fee
             FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
             INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
-            WHERE vws.create_date  BETWEEN '%s' AND '%s'""" % (date_from, date_to)
+            
+            WHERE vws.status = 'CONFIRM' AND VC.START_TIME  BETWEEN '%s' AND '%s'""" % (date_from, date_to)   
+            
 
         if vehicle_id != '0':
             sql += ' AND v.id = %s' % (vehicle_id,)
         
         if fuel_type == 'diesel':
             sql += ' AND v.vehicle_type_id != 1'
-        
+
+        sql += ' ORDER BY vws.START_KM ASC'    
+
         data = connect_sql(sql)
         
         return data
@@ -814,11 +823,18 @@ def get_stage_info(date_from, date_to, vehicle_id, fuel_type='petrol'):
 def get_fuel_settlement(date_from, date_to, vehicle_id):
     try:
         sql = """
-            WITH fee_management AS (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, vc.management_fee, vft.name AS fuel_type
+            WITH all_vehicle AS (
+        SELECT v.id, v.number
                     FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
                     INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id
                     LEFT JOIN vehicle_fueltype as vft ON v.fuel_type_id = vft.id
-                WHERE vws.create_date  BETWEEN '%s' AND '%s' AND v.vehicle_type_id = 1
+                WHERE vws.status = 'CONFIRM' AND VC.START_TIME  BETWEEN '2022-06-01 00:00:00' AND '2022-06-17 23:59:59' AND v.vehicle_type_id = 1
+            GROUP BY v.id, v.number
+        ), fee_management AS (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, vc.management_fee, vft.name AS fuel_type
+                    FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
+                    INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id
+                    LEFT JOIN vehicle_fueltype as vft ON v.fuel_type_id = vft.id
+                WHERE vws.status = 'CONFIRM' AND VC.START_TIME  BETWEEN '%s' AND '%s' AND v.vehicle_type_id = 1
             GROUP BY v.id, v.number, vc.management_fee, vft.name
             HAVING vc.management_fee = 1
         ), nfm AS 
@@ -826,17 +842,20 @@ def get_fuel_settlement(date_from, date_to, vehicle_id):
                     FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
                     INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id
                     LEFT JOIN vehicle_fueltype as vft ON v.fuel_type_id = vft.id
-                WHERE vws.create_date  BETWEEN '%s' AND '%s' AND v.vehicle_type_id = 1
+                WHERE vws.status = 'CONFIRM' AND VC.START_TIME  BETWEEN '%s' AND '%s' AND v.vehicle_type_id = 1
             GROUP BY v.id, v.number, vc.management_fee, vft.name
             HAVING vc.management_fee = 0
         )
-        SELECT fee_management.number, fee_management.id, FORMAT(fee_management.start_km, 'N', 'vi-VN') AS start_km, FORMAT(fee_management.end_km, 'N', 'vi-VN') AS end_km, fee_management.management_fee, fee_management.fuel_type, FORMAT(nfm.start_km, 'N', 'vi-VN') AS nfm_start_km, 
-        FORMAT(nfm.end_km, 'N', 'vi-VN') AS nfm_end_km, nfm.management_fee AS nfm_management_fee, nfm.fuel_type AS nfm_fuel_type FROM fee_management
-        LEFT JOIN nfm ON fee_management.id = nfm.id 
+        SELECT all_vehicle.number, all_vehicle.id, FORMAT(fee_management.start_km, 'N', 'vi-VN') AS start_km, FORMAT(fee_management.end_km, 'N', 'vi-VN') AS end_km, fee_management.management_fee, fee_management.fuel_type, FORMAT(nfm.start_km, 'N', 'vi-VN') AS nfm_start_km, 
+        FORMAT(nfm.end_km, 'N', 'vi-VN') AS nfm_end_km, nfm.management_fee AS nfm_management_fee, nfm.fuel_type AS nfm_fuel_type FROM all_vehicle
+        LEFT JOIN fee_management ON fee_management.id = all_vehicle.id 
+        LEFT JOIN nfm ON nfm.id = all_vehicle.id 
             """ % (date_from, date_to, date_from, date_to)
         if vehicle_id != '0':
             sql += ' AND v.id = %s' % (vehicle_id,)
-        
+
+        sql += ' ORDER BY number, nfm_start_km ASC'
+
         data = connect_sql(sql)
         
         return data
@@ -853,23 +872,23 @@ def get_crane_fuel_settlement(date_from, date_to, vehicle_id):
             WITH total AS (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, SUM(vws.crane_hour) AS crane_hour, SUM(vws.generator_firing_hour) AS generator_firing_hour
                     FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
                     INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id
-                WHERE v.vehicle_type_id != 1 
-                    AND vws.create_date  BETWEEN '{from}' AND '{to}'
+                WHERE vws.status = 'CONFIRM' AND v.vehicle_type_id != 1 
+                    AND VC.START_TIME  BETWEEN '{from}' AND '{to}'
             GROUP BY v.id, v.number
         ), total_sxkd AS 
         (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, SUM(vws.crane_hour) AS crane_hour, SUM(vws.generator_firing_hour) AS generator_firing_hour
                     FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
                     INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
-                WHERE v.vehicle_type_id != 1
-                    AND vws.create_date  BETWEEN '{from}' AND '{to}'
+                WHERE vws.status = 'CONFIRM' AND v.vehicle_type_id != 1
+                    AND VC.START_TIME  BETWEEN '{from}' AND '{to}'
             GROUP BY v.id, v.number, vc.management_fee
             HAVING vc.management_fee = 0
         ), total_dtxd AS 
         (SELECT v.id, v.number, SUM(vws.start_km) AS start_km, SUM(vws.end_km) AS end_km, SUM(vws.crane_hour) AS crane_hour, SUM(vws.generator_firing_hour) AS generator_firing_hour
                     FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
                     INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
-                WHERE v.vehicle_type_id != 1  
-                    AND vws.create_date  BETWEEN '{from}' AND '{to}'
+                WHERE vws.status = 'CONFIRM' AND v.vehicle_type_id != 1  
+                    AND VC.START_TIME  BETWEEN '{from}' AND '{to}'
             GROUP BY v.id, v.number, vc.management_fee
             HAVING vc.management_fee = 1
         )
@@ -884,6 +903,7 @@ def get_crane_fuel_settlement(date_from, date_to, vehicle_id):
         if vehicle_id != '0':
             sql += ' AND v.id = %s' % (vehicle_id,)
         
+        sql += ' ORDER BY number, start_km ASC'
         data = connect_sql(sql)
         
         return data
@@ -897,20 +917,28 @@ def get_bqlda_fuel_settlement(date_from, date_to, vehicle_id):
     try:
         sql = """
             SELECT v.id, v.number, vc.content, FORMAT(vws.start_km, 'N', 'vi-VN') AS start_km, FORMAT(vws.end_km, 'N', 'vi-VN') AS end_km, 
-                vc.destination, vc.content, vft.price, vc.note,
-                CONVERT(VARCHAR(10), vws.create_date, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour, vc.management_fee
+                vc.destination, vc.content, vft.name AS fuel_name, vc.note,
+                CONVERT(VARCHAR(10), vws.create_date, 105) as create_date, coalesce(vws.crane_hour, '') AS crane_hour, coalesce(vws.generator_firing_hour, '') AS generator_firing_hour, vc.management_fee, vc.start_time
                 FROM vehicle_vehicleworkingstage AS vws INNER JOIN vehicle_vehiclecalender AS vc ON vws.calender_id = vc.id
                 INNER JOIN vehicle_vehicle as v ON v.id = vws.vehicle_id 
                 LEFT JOIN vehicle_fueltype as vft ON v.fuel_type_id = vft.id
-                WHERE vc.management_fee = 1
-                AND vws.create_date  BETWEEN '{from}' AND '{to}'
+                WHERE vws.status = 'CONFIRM'
+                AND vc.management_fee = 1
+                AND VC.START_TIME BETWEEN '{from}' AND '{to}'
             """.format(**{"from": date_from , "to": date_to})
         
         if vehicle_id != '0':
             sql += ' AND v.id = %s' % (vehicle_id,)
         
+        sql += ' ORDER BY vws.START_KM ASC'
+        
         data = connect_sql(sql)
         
+        for record in data:
+            price = 0
+            if record['start_time'] and record['fuel_name']:
+                price = find_fuel_price(record['fuel_name'], record['start_time'])
+            record.update({'price': price})
         return data
 
     except Exception as exc:
@@ -991,7 +1019,7 @@ def export_xlsx_routine(request):
 
         worksheet.merge_range(1, column_start + 5, 2, column_start + 5, 'Giờ cẩu', format1)
         worksheet.merge_range(1, column_start + 6, 2, column_start + 6, 'Giờ chạy máy phát (Xe Hotline)', format1)
-        worksheet.merge_range(1, column_start + 7, 2, column_start + 7, 'Ký xác nhận (ghi rõ họ tên)', format1)
+        # worksheet.merge_range(1, column_start + 7, 2, column_start + 7, 'Ký xác nhận (ghi rõ họ tên)', format1)
 
         begin_row = 3
         for line in data_list:
@@ -1090,7 +1118,7 @@ def export_xlsx_form_1(request):
         worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
         worksheet.merge_range('D2:H2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
 
-        worksheet.merge_range('D4:H4', datetime.now().strftime('Tam Kỳ, ngày %d tháng %m năm %Y'), format_itl)
+        worksheet.merge_range('D4:H4', f'Tam Kỳ, {DATE_TIME}', format_itl)
 
         worksheet.merge_range('A5:H5', 'BIÊN BẢN KIỂM TRA CHỐT CHỈ SỐ KM', format1)
         worksheet.merge_range('A6:H6', 'Hôm nay, vào lúc ... giờ 00 phút ngày ... tháng ... năm 2022 chúng tôi gồm có :', format_left_align)
@@ -1136,16 +1164,16 @@ def export_xlsx_form_1(request):
 
             worksheet.write(begin_row, 4, Cal.convert_dot(km_total), format_border)
 
-            amount_total = cal_fee_on_km(km_total, line['id'])
+            # amount_total = cal_fee_on_km(km_total, line['id'])
 
             sxkd_total = 0
             qlda_total = 0
             if not line['management_fee']:
-                sxkd_total = amount_total
+                sxkd_total = km_total
                 worksheet.write(begin_row, 5, Cal.convert_dot(sxkd_total), format_border)
                 worksheet.write(begin_row, 6, 0, format_border)
             else:
-                qlda_total = amount_total
+                qlda_total = km_total
                 worksheet.write(begin_row, 5, 0, format_border)
                 worksheet.write(begin_row, 6, Cal.convert_dot(qlda_total), format_border)
             worksheet.write(begin_row, 7, '', format_border)
@@ -1243,7 +1271,7 @@ def export_xlsx_form_2(request):
         worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
         worksheet.merge_range('D2:H2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
 
-        worksheet.merge_range('D4:H4', datetime.now().strftime('Quảng Nam, ngày %d tháng %m năm %Y'), format_itl)
+        worksheet.merge_range('D4:H4', f'Quảng Nam, {DATE_TIME}', format_itl)
 
         worksheet.merge_range('A5:H5', 'BIÊN BẢN KIỂM TRA CHỐT CHỈ SỐ KM XE CẨU', format1)
         worksheet.merge_range('A6:H6', 'Hôm nay, vào lúc ... giờ 00 phút ngày ... tháng ... năm 2022 chúng tôi gồm có :', format_left_align)
@@ -1258,15 +1286,31 @@ def export_xlsx_form_2(request):
         worksheet.merge_range(10, 1, 11, 1, 'Tên PTVT', format_border)
         worksheet.merge_range(10, 2, 11, 2, 'Km đầu kỳ', format_border)
         worksheet.merge_range(10, 3, 11, 3, 'Km cuối kỳ', format_border)
-        worksheet.merge_range(10, 4, 11, 4, 'Km phát sinh', format_border)
-        worksheet.merge_range(10, 5, 11, 5, 'Giờ cẩu', format_border)
-        worksheet.merge_range(10, 6, 11, 6, 'Ghi chú', format_border)
+
+        worksheet.merge_range(10, 4, 10, 6, 'Km phát sinh', format_border)
+        worksheet.write(11, 4, 'Tổng cộng', format_border)
+        worksheet.write(11, 5, 'SXKD', format_border)
+        worksheet.write(11, 6, 'QLDA', format_border)
+
+        worksheet.merge_range(10, 7, 10, 9, 'Giờ cẩu', format_border)
+        worksheet.write(11, 7, 'Tổng', format_border)
+        worksheet.write(11, 8, 'SXKD', format_border)
+        worksheet.write(11, 9, 'QLDA', format_border)
+
+        worksheet.merge_range(10, 10, 10, 12, 'Giờ nổ máy phát', format_border)
+        worksheet.write(11, 10, 'Tổng', format_border)
+        worksheet.write(11,11, 'SXKD', format_border)
+        worksheet.write(11, 12, 'QLDA', format_border)
+
+        worksheet.merge_range(10, 13, 11, 13, 'Ghi chú', format_border)
 
         begin_row = 12
         stt = 1
 
-        km_amount = 0
-        crane_amount = 0
+        km_amount = sxkd_km_amount = qlda_km_amount = 0
+        crane_amount = sxkd_crane_amount = qlda_crane_amount = 0
+        firing_amount = sxkd_firing_amount = qlda_firing_amount = 0
+
         for line in data_list:
             worksheet.write(begin_row, 0, stt, format_border)
             worksheet.write(begin_row, 1, line['number'], format_border)
@@ -1282,12 +1326,55 @@ def export_xlsx_form_2(request):
 
             worksheet.write(begin_row, 4, Cal.convert_dot(km_total), format_border)
 
-            worksheet.write(begin_row, 5, line['crane_hour'], format_border)
-            worksheet.write(begin_row, 6, '', format_border)
+            sxkd_km = qlda_km = 0
+            if not line['management_fee']:
+                sxkd_km = km_total
+                worksheet.write(begin_row, 5, Cal.convert_dot(sxkd_km), format_border)
+                worksheet.write(begin_row, 6, '0', format_border)
+            else:
+                qlda_km = km_total
+                worksheet.write(begin_row, 5, '0', format_border)
+                worksheet.write(begin_row, 6, Cal.convert_dot(qlda_km), format_border)
 
+            worksheet.write(begin_row, 7, line['crane_hour'], format_border)
+
+            sxkd_crane_hour = qlda_crane_hour = 0
+            if not line['management_fee']:
+                sxkd_crane_hour = line['crane_hour']
+                worksheet.write(begin_row, 8, Cal.convert_dot(sxkd_crane_hour), format_border)
+                worksheet.write(begin_row, 9, '0', format_border)
+            else:
+                qlda_crane_hour = line['crane_hour']
+                worksheet.write(begin_row, 8, '0', format_border)
+                worksheet.write(begin_row, 9, Cal.convert_dot(qlda_crane_hour), format_border)
+
+            worksheet.write(begin_row, 10, line['generator_firing_hour'], format_border)
+
+            sxkd_firing_hour = qlda_firing_hour = 0
+            if not line['management_fee']:
+                sxkd_firing_hour = line['generator_firing_hour']
+                worksheet.write(begin_row, 11, Cal.convert_dot(sxkd_firing_hour), format_border)
+                worksheet.write(begin_row, 12, '0', format_border)
+            else:
+                qlda_firing_hour = line['generator_firing_hour']
+                worksheet.write(begin_row, 11, '0', format_border)
+                worksheet.write(begin_row, 12, Cal.convert_dot(qlda_firing_hour), format_border)
+
+            worksheet.write(begin_row, 13, '', format_border)
+
+            # Line 'Tổng cộng'
             km_amount += km_total
+            sxkd_km_amount += sxkd_km
+            qlda_km_amount += qlda_km
+
             crane_amount += line['crane_hour']
-            
+            sxkd_crane_amount += sxkd_crane_hour
+            qlda_crane_amount += qlda_crane_hour
+
+            firing_amount += line['generator_firing_hour']
+            sxkd_firing_amount += sxkd_firing_hour
+            qlda_firing_amount += qlda_firing_hour
+
             stt += 1
             begin_row += 1
         
@@ -1295,8 +1382,15 @@ def export_xlsx_form_2(request):
         worksheet.merge_range(begin_row, 1, begin_row, 2, 'Tổng cộng: ', format_border)
         worksheet.write(begin_row, 3, '', format_border)
         worksheet.write(begin_row, 4, km_amount, format_border)
-        worksheet.write(begin_row, 5, crane_amount, format_border)
-        worksheet.write(begin_row, 6, '', format_border)
+        worksheet.write(begin_row, 5, sxkd_km_amount, format_border)
+        worksheet.write(begin_row, 6, qlda_km_amount, format_border)
+        worksheet.write(begin_row, 7, crane_amount, format_border)
+        worksheet.write(begin_row, 8, sxkd_crane_amount, format_border)
+        worksheet.write(begin_row, 9, qlda_crane_amount, format_border)
+        worksheet.write(begin_row, 10, firing_amount, format_border)
+        worksheet.write(begin_row, 11, sxkd_firing_amount, format_border)
+        worksheet.write(begin_row, 12, qlda_firing_amount, format_border)
+        worksheet.write(begin_row, 13, '', format_border)
 
         worksheet.merge_range(begin_row + 1, 0, begin_row + 1, 4, 'Biên bản kết thúc vào lúc ... giờ ... phút cùng ngày.', format_left_align)
 
@@ -1324,6 +1418,7 @@ def export_xlsx_form_3(request):
             _date_from = convertDate(date_from) + ' 00:00:00'
             _date_to = convertDate(date_to) + ' 23:59:59'
             data_list = get_fuel_settlement(_date_from, _date_to, vehicle_id)
+            # data_list = union_and_check_duplicate(data_list)
 
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = "attachment; filename=BangQuyetToanNhienLieu.xlsx"
@@ -1380,7 +1475,7 @@ def export_xlsx_form_3(request):
         worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
         worksheet.merge_range('D2:L2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
 
-        worksheet.merge_range('D4:L4', datetime.now().strftime('Tam Kỳ, ngày %d tháng %m năm %Y'), format_itl)
+        worksheet.merge_range('D4:L4', f'Tam Kỳ, {DATE_TIME}', format_itl)
 
         worksheet.merge_range('A5:L5', 'BẢNG QUYẾT TOÁN NHIÊN LIỆU', format1)
         worksheet.merge_range('A6:L6', 'Thời gian, từ ngày %s đến ngày %s' % (dmy_from, dmy_to), format_left_align)
@@ -1574,7 +1669,7 @@ def export_xlsx_form_4(request):
         worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
         worksheet.merge_range('D2:L2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
 
-        worksheet.merge_range('D4:L4', datetime.now().strftime('Quảng Nam, ngày %d tháng %m năm %Y'), format_itl)
+        worksheet.merge_range('D4:L4', f'Quảng Nam, {DATE_TIME}', format_itl)
 
         worksheet.merge_range('A5:L5', 'BẢNG QUYẾT TOÁN NHIÊN LIỆU', format1)
         worksheet.merge_range('A6:L6', 'Thời gian, từ ngày %s đến ngày %s' % (dmy_from, dmy_to), format_left_align)
@@ -1652,7 +1747,7 @@ def export_xlsx_form_4(request):
 
             table_total_km += km_total
             table_total_crane += line['crane_hour']
-            table_total_generator_firing += table_total_generator_firing
+            table_total_generator_firing += line['generator_firing_hour'] or 0.0
 
             table_total_diesel += diesel_liter_total
             table_total_sxkd += sxkd_liter_total
@@ -1703,7 +1798,7 @@ def export_xlsx_form_5(request):
             vehicle_item = [line.update({'count': vehicle_count[line['vehicle']]}) for line in vehicle_dict]
 
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = "attachment; filename=BangQuyetToanNhienLieuXeCau.xlsx"
+        response['Content-Disposition'] = "attachment; filename=BangQuyetToanNhienLieuBQLDA.xlsx"
         # Create a workbook and add a worksheet.
         workbook = xlsxwriter.Workbook(response, {'in_memory': True})
     
@@ -1763,7 +1858,7 @@ def export_xlsx_form_5(request):
         worksheet.merge_range('A2:C2', 'VĂN PHÒNG', format_unl)
         worksheet.merge_range('D2:L2', 'Độc lập - Tự do - Hạnh Phúc', format_unl)
 
-        worksheet.merge_range('D4:L4', datetime.now().strftime('Quảng Nam, ngày %d tháng %m năm %Y'), format_itl)
+        worksheet.merge_range('D4:L4', f'Quảng Nam, {DATE_TIME}', format_itl)
 
         worksheet.merge_range('A5:L5', 'BẢNG QUYẾT TOÁN NHIÊN LIỆU BQLDA', format1)
         worksheet.merge_range('A6:L6', 'Thời gian, từ ngày %s đến ngày %s' % (dmy_from, dmy_to), format_left_align)
@@ -1968,7 +2063,7 @@ class VehicleWorkingStageView(View):
                         post = form.save(commit=False)
                         post.write_uid = user_id
                         post.write_date = datetime.now()
-                        post.fuel_type = self.get_fuel_type(calendar_id)
+                        post.fuel_type = post.vehicle.fuel_type or None
                         post.save()
                 else:
                     form = VehicleWorkingStageForm(request.POST, request.FILES)
@@ -1976,7 +2071,7 @@ class VehicleWorkingStageView(View):
                     post.create_uid = user_id
                     post.create_date = datetime.now()
                     post.calender = calendar_record
-                    post.fuel_type = self.get_fuel_type(calendar_id)
+                    post.fuel_type = post.vehicle.fuel_type or None
                     post.save()
 
             return redirect(request.environ['HTTP_REFERER'])

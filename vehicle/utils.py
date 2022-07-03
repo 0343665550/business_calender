@@ -1,6 +1,7 @@
 from .models import *
 from calender.models import *
 from calender.views import connect_sql
+import math
 
 def convert_number(string):
     response = string
@@ -79,11 +80,29 @@ class Calculation(object):
     @staticmethod
     def convert_comma(number):
         if not number:
-            return ''
+            return 0
+        frac, whole = math.modf(number)
+        if frac > 0.0:
+            return f"{number: ,.2f}"
         return f"{number: ,.0f}"
 
     @staticmethod
     def convert_dot(number):
         if not number:
-            return ''
+            return 0
+        frac, whole = math.modf(number)
+        if frac > 0.0:
+            return f"{number: ,.2f}"
         return f"{number: ,.0f}".replace(',', '.')
+
+
+def find_fuel_price(fueltype, start_time):
+    sql = f"""
+        SELECT price FROM vehicle_fueltype WHERE name = N'{fueltype}' 
+        AND start_time <= '{start_time}' AND end_time >= '{start_time}'
+        ORDER BY create_date DESC
+        """
+    data = connect_sql(sql)
+    if len(data) > 0:
+        return data[0]['price']
+    return 0

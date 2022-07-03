@@ -6,11 +6,12 @@ from datetime import datetime
 from calender.models import *
 from django.http import HttpResponse
 from calender.views import start_end_of_week, getDepartment, convertNumberWeek, getGroupUserId,\
-getDepartmentUserId, getlistusers, execute_sql
+getDepartmentUserId, getlistusers, execute_sql, connect_sql
 from django.urls import path
 from django.template.response import TemplateResponse
 from django.shortcuts import redirect
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 # Register your models here.
 
@@ -134,7 +135,16 @@ class VehicleAdmin(admin.ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         
         form = super(VehicleAdmin, self).get_form(request, obj=None, **kwargs)
-        form.base_fields['fuel_type'].queryset = FuelType.objects.filter(active=True)
+        # GET 2 NEWEST RECORD IS PETROL & DIESEL
+        sql = """
+            WITH petrol AS 
+            ( SELECT *, ROW_NUMBER() OVER (ORDER BY start_time DESC) AS petrol_rnum FROM vehicle_fueltype WHERE name = N'Xăng' AND active = 1),
+            diesel AS 
+            ( SELECT *, ROW_NUMBER() OVER (ORDER BY start_time DESC) AS diesel_rnum  FROM vehicle_fueltype WHERE name = N'Dầu' AND active = 1 )
+            SELECT id FROM petrol WHERE petrol_rnum = 1 UNION SELECT id FROM diesel WHERE diesel_rnum = 1
+            """
+        data = connect_sql(sql)
+        form.base_fields['fuel_type'].queryset = FuelType.objects.filter(pk__in=[item['id'] for item in data])
         return form
 
 
@@ -262,7 +272,20 @@ class FuelTypeAdminForm(ModelForm):
         start_time = cleaned_data.get('start_time')
         end_time = cleaned_data.get('end_time')
         if start_time == end_time:
-            raise ValidationError('invalid!')
+            raise ValidationError('Vui lòng chọn lại thời gian áp dụng!')
+        
+        name = cleaned_data.get('name', False)
+        # CHECK DATE RANGE WHEN CREATE OR UPDATE RECORD
+        if name and start_time and end_time:
+            sql = f"""
+                SELECT id FROM vehicle_fueltype WHERE name = N'{name}' 
+                AND ((start_time <= '{start_time}' AND end_time >= '{start_time}') 
+                OR (start_time <= '{end_time}' AND end_time >= '{end_time}'))
+                """
+            data = connect_sql(sql)
+            if len(data) > 0:
+                raise ValidationError('Thời gian áp dụng không hợp lệ!')
+
         return cleaned_data
 
 
@@ -270,12 +293,12 @@ class FuelTypeAdmin(admin.ModelAdmin):
     form = FuelTypeAdminForm
 
     ordering = ['name']
-    list_display = ('name', 'price', 'start_time', 'end_time', 'is_track', 'active')
-    search_fields = ('name', 'price', 'start_time', 'end_time', 'is_track', 'active')
-    list_filter = ('name', 'price', 'start_time', 'end_time', 'is_track', 'active')
+    list_display = ('name', 'price', 'start_time', 'end_time', 'active')
+    search_fields = ('name', 'price', 'start_time', 'end_time', 'active')
+    list_filter = ('name', 'price', 'start_time', 'end_time', 'active')
     fieldsets = [
         ['Thông tin loại nhiên liệu', {
-            'fields': ['name', 'price', 'start_time', 'end_time', 'is_track', 'active']
+            'fields': ['name', 'price', 'start_time', 'end_time', 'active']
         }],
     ]
 
@@ -283,10 +306,10 @@ class FuelTypeAdmin(admin.ModelAdmin):
         if obj.pk is None:
             obj.create_uid = request.user
         else:
-            if obj.is_track and 'price' in form.changed_data and \
-                    'start_time' in form.changed_data and 'end_time' in form.changed_data:
-                old_data = FuelType.objects.get(id=obj.id)
-                self.save_old_record(old_data, request.user)
+            # if obj.is_track and 'price' in form.changed_data and \
+            #         'start_time' in form.changed_data and 'end_time' in form.changed_data:
+            #     old_data = FuelType.objects.get(id=obj.id)
+            #     self.save_old_record(old_data, request.user)
                 # generate data in medium table m2m
                 # vehicles = Vehicle.objects.filter(fuel_type=obj.id)
                 # for item in vehicles:
